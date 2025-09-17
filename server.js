@@ -3,10 +3,16 @@ const cors = require('cors');
 const sql = require('mssql');
 const tf = require('@tensorflow/tfjs-node');
 const fs = require('fs').promises;
+const https = require('https');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Weather API configuration
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY; // Get from OpenWeatherMap
+const WEATHER_CITY = process.env.WEATHER_CITY || 'London'; // Default city
+const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather';
 
 // Middleware
 app.use(cors());
@@ -26,6 +32,7 @@ const dbConfig = {
 let pool, model, normalizationParams = {};
 let useMemoryFallback = false;
 let temperatureData = [], predictions = [], predictionAccuracy = [];
+let weatherUpdateInterval;
 
 // Initialize database with fallback
 async function initDB() {
@@ -39,7 +46,6 @@ async function initDB() {
         console.log('✅ Connected to Azure SQL (strato_db)');
         
         await createTables();
-        await generateDummyData();
         return true;
     } catch (err) {
         console.error('❌ Database connection failed:', err.message);
@@ -48,7 +54,6 @@ async function initDB() {
             console.log('🔄 Using in-memory fallback...');
             useMemoryFallback = true;
             await loadMemoryData();
-            await generateMemoryData();
             return true;
         }
         throw err;
@@ -58,18 +63,13 @@ async function initDB() {
 // Create database tables
 async function createTables() {
     try {
-        console.log('🔍 Checking existing tables...');
-        
-        // Check which tables exist
         const existingTables = await pool.request().query(`
             SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES 
             WHERE TABLE_TYPE = 'BASE TABLE'
         `);
         
         const tableNames = existingTables.recordset.map(row => row.TABLE_NAME.toLowerCase());
-        console.log('📋 Existing tables:', tableNames.join(', ') || 'none');
         
-        // Create temperature_data table if it doesn't exist
         if (!tableNames.includes('temperature_data')) {
             await pool.request().query(`
                 CREATE TABLE temperature_data (
@@ -84,12 +84,8 @@ async function createTables() {
                     created_at DATETIME2 DEFAULT GETDATE()
                 )
             `);
-            console.log('✅ Created temperature_data table');
-        } else {
-            console.log('📊 temperature_data table already exists');
         }
         
-        // Create predictions table if it doesn't exist
         if (!tableNames.includes('predictions')) {
             await pool.request().query(`
                 CREATE TABLE predictions (
@@ -98,15 +94,12 @@ async function createTables() {
                     target_date DATETIME2 NOT NULL,
                     predicted_temperature FLOAT NOT NULL,
                     confidence FLOAT DEFAULT 0.8,
-                    features_used TEXT
+                    features_used TEXT,
+                    model_version VARCHAR(50) DEFAULT 'v1.0'
                 )
             `);
-            console.log('✅ Created predictions table');
-        } else {
-            console.log('🔮 predictions table already exists');
         }
         
-        // Create prediction_accuracy table if it doesn't exist
         if (!tableNames.includes('prediction_accuracy')) {
             await pool.request().query(`
                 CREATE TABLE prediction_accuracy (
@@ -115,12 +108,10 @@ async function createTables() {
                     actual_temperature FLOAT NOT NULL,
                     predicted_temperature FLOAT NOT NULL,
                     absolute_error FLOAT NOT NULL,
+                    percentage_error FLOAT NOT NULL,
                     evaluation_date DATETIME2 DEFAULT GETDATE()
                 )
             `);
-            console.log('✅ Created prediction_accuracy table');
-        } else {
-            console.log('📈 prediction_accuracy table already exists');
         }
         
         console.log('✅ Database tables ready');
@@ -130,98 +121,120 @@ async function createTables() {
     }
 }
 
-// Generate dummy data
-async function generateDummyData() {
-    try {
-        let count = 0;
-        
-        if (useMemoryFallback) {
-            count = temperatureData.length;
-        } else {
-            const result = await pool.request().query('SELECT COUNT(*) as count FROM temperature_data');
-            count = result.recordset[0].count;
-        }
-        
-        if (count >= 100) {
-            console.log(`📊 Database already has ${count} records, skipping dummy data generation`);
+// Weather API functions
+async function fetchWeatherData() {
+    return new Promise((resolve, reject) => {
+        if (!WEATHER_API_KEY) {
+            reject(new Error('Weather API key not configured'));
             return;
         }
+
+        const url = `${WEATHER_API_URL}?q=${WEATHER_CITY}&appid=${WEATHER_API_KEY}&units=metric`;
         
-        console.log('📊 Generating 400 days of temperature data...');
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 400);
-        
-        let recordsAdded = 0;
-        
-        for (let i = 0; i < 400; i++) {
-            const date = new Date(startDate);
-            date.setDate(date.getDate() + i);
+        https.get(url, (response) => {
+            let data = '';
             
-            // Generate 4 readings per day
-            for (let hour = 0; hour < 24; hour += 6) {
-                const currentDate = new Date(date);
-                currentDate.setHours(hour, 0, 0, 0);
-                
-                const dayOfYear = Math.floor((currentDate - new Date(currentDate.getFullYear(), 0, 0)) / 86400000);
-                const temp = 15 + 10 * Math.sin(2 * Math.PI * (dayOfYear - 80) / 365) + 
-                            3 * Math.sin(2 * Math.PI * (hour - 6) / 24) + (Math.random() - 0.5) * 4;
-                const humidity = Math.max(20, Math.min(95, 70 - (temp - 15) * 1.5 + (Math.random() - 0.5) * 20));
-                const pressure = 1013 + Math.sin(2 * Math.PI * dayOfYear / 365) * 10 + (Math.random() - 0.5) * 15;
-                
-                if (useMemoryFallback) {
-                    temperatureData.push({
-                        id: temperatureData.length + 1,
-                        date_time: currentDate.toISOString(),
-                        temperature: Math.round(temp * 10) / 10,
-                        humidity: Math.round(humidity * 10) / 10,
-                        pressure: Math.round(pressure * 10) / 10,
-                        wind_speed: Math.round((5 + Math.random() * 10) * 10) / 10,
-                        cloud_cover: Math.round((Math.random() * 100) * 10) / 10,
-                        data_type: 'actual'
-                    });
-                } else {
-                    try {
-                        await pool.request()
-                            .input('date_time', sql.DateTime2, currentDate)
-                            .input('temperature', sql.Float, Math.round(temp * 10) / 10)
-                            .input('humidity', sql.Float, Math.round(humidity * 10) / 10)
-                            .input('pressure', sql.Float, Math.round(pressure * 10) / 10)
-                            .input('wind_speed', sql.Float, Math.round((5 + Math.random() * 10) * 10) / 10)
-                            .input('cloud_cover', sql.Float, Math.round((Math.random() * 100) * 10) / 10)
-                            .query(`INSERT INTO temperature_data (date_time, temperature, humidity, pressure, wind_speed, cloud_cover) 
-                                    VALUES (@date_time, @temperature, @humidity, @pressure, @wind_speed, @cloud_cover)`);
-                        recordsAdded++;
-                    } catch (insertError) {
-                        // Skip duplicate entries or other insert errors
-                        if (insertError.message.includes('duplicate') || insertError.message.includes('UNIQUE')) {
-                            continue;
-                        } else {
-                            throw insertError;
-                        }
+            response.on('data', (chunk) => {
+                data += chunk;
+            });
+            
+            response.on('end', () => {
+                try {
+                    const weatherData = JSON.parse(data);
+                    
+                    if (weatherData.cod === 200) {
+                        const processedData = {
+                            temperature: Math.round(weatherData.main.temp * 10) / 10,
+                            humidity: weatherData.main.humidity,
+                            pressure: weatherData.main.pressure,
+                            wind_speed: Math.round((weatherData.wind?.speed || 0) * 3.6 * 10) / 10, // Convert m/s to km/h
+                            cloud_cover: weatherData.clouds?.all || 0,
+                            weather_description: weatherData.weather[0]?.description || 'unknown',
+                            city: weatherData.name,
+                            country: weatherData.sys?.country || '',
+                            timestamp: new Date()
+                        };
+                        resolve(processedData);
+                    } else {
+                        reject(new Error(`Weather API error: ${weatherData.message || 'Unknown error'}`));
                     }
+                } catch (error) {
+                    reject(new Error('Failed to parse weather data'));
                 }
-            }
-            
-            // Show progress every 50 days
-            if ((i + 1) % 50 === 0) {
-                console.log(`📈 Progress: ${i + 1}/400 days processed...`);
-            }
+            });
+        }).on('error', (error) => {
+            reject(new Error(`Weather API request failed: ${error.message}`));
+        });
+    });
+}
+
+async function saveWeatherDataToDB(weatherData) {
+    try {
+        if (useMemoryFallback) {
+            temperatureData.push({
+                id: temperatureData.length + 1,
+                date_time: weatherData.timestamp.toISOString(),
+                temperature: weatherData.temperature,
+                humidity: weatherData.humidity,
+                pressure: weatherData.pressure,
+                wind_speed: weatherData.wind_speed,
+                cloud_cover: weatherData.cloud_cover,
+                data_type: 'weather_api',
+                weather_description: weatherData.weather_description,
+                location: `${weatherData.city}, ${weatherData.country}`
+            });
+            await saveMemoryData();
+        } else {
+            await pool.request()
+                .input('date_time', sql.DateTime2, weatherData.timestamp)
+                .input('temperature', sql.Float, weatherData.temperature)
+                .input('humidity', sql.Float, weatherData.humidity)
+                .input('pressure', sql.Float, weatherData.pressure)
+                .input('wind_speed', sql.Float, weatherData.wind_speed)
+                .input('cloud_cover', sql.Float, weatherData.cloud_cover)
+                .input('data_type', sql.VarChar, 'weather_api')
+                .query(`INSERT INTO temperature_data (date_time, temperature, humidity, pressure, wind_speed, cloud_cover, data_type) 
+                        VALUES (@date_time, @temperature, @humidity, @pressure, @wind_speed, @cloud_cover, @data_type)`);
         }
         
-        if (useMemoryFallback) {
-            await saveMemoryData();
-            console.log(`✅ Generated ${temperatureData.length} records in memory`);
-        } else {
-            console.log(`✅ Generated ${recordsAdded} new temperature records`);
-        }
-    } catch (err) {
-        console.error('❌ Error generating dummy data:', err.message);
-        // Don't throw error - continue with existing data
-        console.log('⚠️ Continuing with existing data...');
+        console.log(`Weather data saved: ${weatherData.temperature}°C in ${weatherData.city}`);
+        return true;
+    } catch (error) {
+        console.error('Error saving weather data:', error);
+        return false;
     }
 }
 
-// Memory data management
+async function updateWeatherData() {
+    try {
+        const weatherData = await fetchWeatherData();
+        await saveWeatherDataToDB(weatherData);
+        return weatherData;
+    } catch (error) {
+        console.error('Weather update failed:', error.message);
+        return null;
+    }
+}
+
+function startWeatherUpdates() {
+    if (!WEATHER_API_KEY) {
+        console.log('Weather API key not configured - skipping automatic updates');
+        return;
+    }
+
+    // Update weather data every hour
+    weatherUpdateInterval = setInterval(async () => {
+        await updateWeatherData();
+    }, 60 * 60 * 1000); // 1 hour
+
+    // Initial weather data fetch
+    setTimeout(async () => {
+        const initialData = await updateWeatherData();
+        if (initialData) {
+            console.log(`Weather API initialized: ${initialData.city}, ${initialData.country}`);
+        }
+    }, 5000); // Wait 5 seconds after startup
+}
 async function loadMemoryData() {
     try {
         const data = JSON.parse(await fs.readFile('strato_data.json', 'utf8'));
@@ -239,11 +252,6 @@ async function saveMemoryData() {
     await fs.writeFile('strato_data.json', JSON.stringify({
         temperatureData, predictions, predictionAccuracy, lastSaved: new Date()
     }, null, 2));
-}
-
-async function generateMemoryData() {
-    if (temperatureData.length >= 100) return;
-    await generateDummyData();
 }
 
 // Create AI model
@@ -281,7 +289,10 @@ async function trainModel() {
             data = result.recordset;
         }
         
-        if (data.length < 50) return false;
+        if (data.length < 10) {
+            console.log('⚠️ Need at least 10 data points to train model');
+            return false;
+        }
         
         // Add previous temperature feature
         const processedData = [];
@@ -312,8 +323,8 @@ async function trainModel() {
         const labels = processedData.map(d => (d.temperature - tempMean) / tempStd);
         
         await model.fit(tf.tensor2d(features), tf.tensor2d(labels, [labels.length, 1]), {
-            epochs: 50,
-            batchSize: 32,
+            epochs: Math.min(50, data.length),
+            batchSize: Math.min(32, Math.floor(data.length / 2)),
             validationSplit: 0.2,
             verbose: 0
         });
@@ -329,7 +340,7 @@ async function trainModel() {
 // Make prediction
 async function makePrediction(targetDate) {
     if (!model || !normalizationParams.tempMean) {
-        throw new Error('Model not ready');
+        throw new Error('Model not ready - need to train first');
     }
     
     let recentData;
@@ -345,7 +356,7 @@ async function makePrediction(targetDate) {
         recentData = result.recordset;
     }
     
-    if (recentData.length === 0) throw new Error('No recent data');
+    if (recentData.length === 0) throw new Error('No recent data available');
     
     const latest = recentData[0];
     const targetHour = new Date(targetDate).getHours();
@@ -365,7 +376,15 @@ async function makePrediction(targetDate) {
     
     return {
         predicted_temperature: Math.round((normalizedResult[0] * normalizationParams.tempStd + normalizationParams.tempMean) * 10) / 10,
-        confidence: 0.85
+        confidence: 0.85,
+        features_used: JSON.stringify({
+            prev_temp: latest.temperature,
+            humidity: latest.humidity,
+            pressure: latest.pressure,
+            wind_speed: latest.wind_speed,
+            cloud_cover: latest.cloud_cover,
+            hour_factor: Math.sin(2 * Math.PI * targetHour / 24)
+        })
     };
 }
 
@@ -373,14 +392,32 @@ async function makePrediction(targetDate) {
 
 // Health check
 app.get('/api/health', async (req, res) => {
-    const stats = useMemoryFallback ? 
-        { total_records: temperatureData.length, predictions: predictions.length } :
-        await pool.request().query('SELECT COUNT(*) as total_records FROM temperature_data').then(r => r.recordset[0]);
+    let stats;
+    if (useMemoryFallback) {
+        stats = { 
+            total_records: temperatureData.length, 
+            predictions: predictions.length,
+            accuracy_records: predictionAccuracy.length
+        };
+    } else {
+        try {
+            const result = await pool.request().query(`
+                SELECT 
+                    (SELECT COUNT(*) FROM temperature_data) as total_records,
+                    (SELECT COUNT(*) FROM predictions) as predictions,
+                    (SELECT COUNT(*) FROM prediction_accuracy) as accuracy_records
+            `);
+            stats = result.recordset[0];
+        } catch (err) {
+            stats = { error: 'Database query failed' };
+        }
+    }
     
     res.json({
         status: 'healthy',
         database: useMemoryFallback ? 'in-memory' : 'strato_db',
         model: model ? 'loaded' : 'not_loaded',
+        model_trained: normalizationParams.tempMean ? true : false,
         data_summary: stats,
         timestamp: new Date()
     });
@@ -419,8 +456,11 @@ app.post('/api/temperature', async (req, res) => {
             temperatureData.push({
                 id: temperatureData.length + 1,
                 date_time: dateTime.toISOString(),
-                temperature, humidity: humidity || 60, pressure: pressure || 1013,
-                wind_speed: wind_speed || 5, cloud_cover: cloud_cover || 50,
+                temperature, 
+                humidity: humidity || 60, 
+                pressure: pressure || 1013,
+                wind_speed: wind_speed || 5, 
+                cloud_cover: cloud_cover || 50,
                 data_type: 'actual'
             });
             await saveMemoryData();
@@ -460,7 +500,9 @@ app.post('/api/predict/next-day', async (req, res) => {
                 prediction_date: new Date().toISOString(),
                 target_date: tomorrow.toISOString(),
                 predicted_temperature: prediction.predicted_temperature,
-                confidence: prediction.confidence
+                confidence: prediction.confidence,
+                features_used: prediction.features_used,
+                model_version: 'v1.0'
             });
             await saveMemoryData();
         } else {
@@ -468,8 +510,9 @@ app.post('/api/predict/next-day', async (req, res) => {
                 .input('target_date', sql.DateTime2, tomorrow)
                 .input('predicted_temperature', sql.Float, prediction.predicted_temperature)
                 .input('confidence', sql.Float, prediction.confidence)
-                .query(`INSERT INTO predictions (target_date, predicted_temperature, confidence) 
-                        OUTPUT INSERTED.id VALUES (@target_date, @predicted_temperature, @confidence)`);
+                .input('features_used', sql.Text, prediction.features_used)
+                .query(`INSERT INTO predictions (target_date, predicted_temperature, confidence, features_used) 
+                        OUTPUT INSERTED.id VALUES (@target_date, @predicted_temperature, @confidence, @features_used)`);
             predictionId = result.recordset[0].id;
         }
         
@@ -477,14 +520,16 @@ app.post('/api/predict/next-day', async (req, res) => {
             success: true,
             prediction_id: predictionId,
             target_date: tomorrow,
-            ...prediction
+            predicted_temperature: prediction.predicted_temperature,
+            confidence: prediction.confidence,
+            features_used: JSON.parse(prediction.features_used)
         });
     } catch (err) {
         res.status(500).json({ error: 'Prediction failed: ' + err.message });
     }
 });
 
-// Evaluate prediction
+// Evaluate prediction and learn
 app.post('/api/evaluate', async (req, res) => {
     try {
         const { prediction_id, actual_temperature } = req.body;
@@ -505,6 +550,7 @@ app.post('/api/evaluate', async (req, res) => {
         }
         
         const error = Math.abs(actual_temperature - prediction.predicted_temperature);
+        const percentageError = (error / Math.abs(actual_temperature)) * 100;
         
         // Save accuracy
         if (useMemoryFallback) {
@@ -514,6 +560,7 @@ app.post('/api/evaluate', async (req, res) => {
                 actual_temperature,
                 predicted_temperature: prediction.predicted_temperature,
                 absolute_error: error,
+                percentage_error: percentageError,
                 evaluation_date: new Date().toISOString()
             });
             await saveMemoryData();
@@ -523,22 +570,93 @@ app.post('/api/evaluate', async (req, res) => {
                 .input('actual_temperature', sql.Float, actual_temperature)
                 .input('predicted_temperature', sql.Float, prediction.predicted_temperature)
                 .input('absolute_error', sql.Float, error)
-                .query(`INSERT INTO prediction_accuracy (prediction_id, actual_temperature, predicted_temperature, absolute_error) 
-                        VALUES (@prediction_id, @actual_temperature, @predicted_temperature, @absolute_error)`);
+                .input('percentage_error', sql.Float, percentageError)
+                .query(`INSERT INTO prediction_accuracy (prediction_id, actual_temperature, predicted_temperature, absolute_error, percentage_error) 
+                        VALUES (@prediction_id, @actual_temperature, @predicted_temperature, @absolute_error, @percentage_error)`);
         }
         
-        // Retrain if large error
-        if (error > 3.0) {
-            setTimeout(() => trainModel(), 1000);
+        // Add actual data point for future training
+        const targetDate = new Date(prediction.target_date);
+        if (useMemoryFallback) {
+            temperatureData.push({
+                id: temperatureData.length + 1,
+                date_time: targetDate.toISOString(),
+                temperature: actual_temperature,
+                humidity: 60, pressure: 1013, wind_speed: 5, cloud_cover: 50,
+                data_type: 'correction'
+            });
+            await saveMemoryData();
+        } else {
+            await pool.request()
+                .input('date_time', sql.DateTime2, targetDate)
+                .input('temperature', sql.Float, actual_temperature)
+                .input('data_type', sql.VarChar, 'correction')
+                .query(`INSERT INTO temperature_data (date_time, temperature, data_type) 
+                        VALUES (@date_time, @temperature, @data_type)`);
+        }
+        
+        // Auto-retrain if error is large
+        let retraining = false;
+        if (error > 2.0) {
+            setTimeout(async () => {
+                try {
+                    await trainModel();
+                    console.log('🔄 Model retrained due to large error');
+                } catch (err) {
+                    console.error('Retraining failed:', err);
+                }
+            }, 1000);
+            retraining = true;
         }
         
         res.json({
             success: true,
             absolute_error: Math.round(error * 100) / 100,
-            accuracy_percentage: Math.round(Math.max(0, 100 - error * 10) * 100) / 100
+            percentage_error: Math.round(percentageError * 100) / 100,
+            accuracy_percentage: Math.round(Math.max(0, 100 - percentageError) * 100) / 100,
+            auto_retrain_triggered: retraining
         });
     } catch (err) {
-        res.status(500).json({ error: 'Evaluation failed' });
+        res.status(500).json({ error: 'Evaluation failed: ' + err.message });
+    }
+});
+
+// Get analytics
+app.get('/api/analytics', async (req, res) => {
+    try {
+        let data, accuracyData;
+        
+        if (useMemoryFallback) {
+            data = temperatureData;
+            accuracyData = predictionAccuracy;
+        } else {
+            const tempResult = await pool.request().query('SELECT * FROM temperature_data ORDER BY date_time');
+            const accResult = await pool.request().query('SELECT * FROM prediction_accuracy ORDER BY evaluation_date');
+            data = tempResult.recordset;
+            accuracyData = accResult.recordset;
+        }
+        
+        // Calculate analytics
+        const analytics = {
+            total_data_points: data.length,
+            total_predictions: accuracyData.length,
+            average_error: accuracyData.length > 0 ? 
+                accuracyData.reduce((sum, a) => sum + a.absolute_error, 0) / accuracyData.length : 0,
+            best_prediction: accuracyData.length > 0 ? 
+                Math.min(...accuracyData.map(a => a.absolute_error)) : 0,
+            worst_prediction: accuracyData.length > 0 ? 
+                Math.max(...accuracyData.map(a => a.absolute_error)) : 0,
+            recent_accuracy: accuracyData.slice(-5).length > 0 ?
+                accuracyData.slice(-5).reduce((sum, a) => sum + (100 - a.percentage_error), 0) / accuracyData.slice(-5).length : 0,
+            data_sources: {
+                actual: data.filter(d => d.data_type === 'actual').length,
+                corrections: data.filter(d => d.data_type === 'correction').length
+            }
+        };
+        
+        res.json(analytics);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch analytics' });
     }
 });
 
@@ -548,141 +666,140 @@ app.post('/api/retrain', async (req, res) => {
         const success = await trainModel();
         res.json({ 
             success, 
-            message: success ? 'Model retrained successfully' : 'Training failed - insufficient data'
+            message: success ? 'Model retrained successfully' : 'Training failed - need more data'
         });
     } catch (err) {
         res.status(500).json({ error: 'Retraining failed' });
     }
 });
 
-// Simple web interface
+// Get current weather data
+app.get('/api/weather/current', async (req, res) => {
+    try {
+        const weatherData = await fetchWeatherData();
+        res.json({
+            success: true,
+            data: weatherData,
+            timestamp: new Date()
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message,
+            configured: !!WEATHER_API_KEY
+        });
+    }
+});
+
+// Manually trigger weather data save
+app.post('/api/weather/save', async (req, res) => {
+    try {
+        const weatherData = await updateWeatherData();
+        if (weatherData) {
+            res.json({
+                success: true,
+                message: 'Weather data saved successfully',
+                data: weatherData
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to fetch or save weather data'
+            });
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get weather configuration status
+app.get('/api/weather/status', (req, res) => {
+    res.json({
+        configured: !!WEATHER_API_KEY,
+        city: WEATHER_CITY,
+        auto_updates: !!weatherUpdateInterval,
+        last_update: new Date() // This would be stored in a real implementation
+    });
+});
+app.get('/api/predictions/recent', async (req, res) => {
+    try {
+        let recentPredictions;
+        
+        if (useMemoryFallback) {
+            recentPredictions = predictions
+                .sort((a, b) => new Date(b.prediction_date) - new Date(a.prediction_date))
+                .slice(0, 10)
+                .map(pred => {
+                    const accuracy = predictionAccuracy.find(acc => acc.prediction_id === pred.id);
+                    return {
+                        ...pred,
+                        actual_temperature: accuracy ? accuracy.actual_temperature : null,
+                        absolute_error: accuracy ? accuracy.absolute_error : null,
+                        status: accuracy ? 'evaluated' : 'pending'
+                    };
+                });
+        } else {
+            const result = await pool.request().query(`
+                SELECT TOP 10 
+                    p.*,
+                    pa.actual_temperature,
+                    pa.absolute_error,
+                    CASE WHEN pa.id IS NULL THEN 'pending' ELSE 'evaluated' END as status
+                FROM predictions p
+                LEFT JOIN prediction_accuracy pa ON p.id = pa.prediction_id
+                ORDER BY p.prediction_date DESC
+            `);
+            recentPredictions = result.recordset;
+        }
+        
+        res.json(recentPredictions);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch predictions' });
+    }
+});
+
+// Enhanced web interface - serve static file
 app.get('/', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>🌡️ AI Temperature Prediction - strato_db</title>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-            .card { background: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .status { background: linear-gradient(45deg, #28a745, #20c997); color: white; text-align: center; }
-            button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
-            button:hover { background: #0056b3; }
-            input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
-        </style>
-        </head>
-        <body>
-            <div class="card status">
-                <h1>🌡️ AI Temperature Prediction System</h1>
-                <p><strong>Database:</strong> ${useMemoryFallback ? 'In-Memory Storage' : 'Azure SQL (strato_db)'}</p>
-                <p><strong>Status:</strong> ${model ? '✅ AI Model Ready' : '⏳ Training...'}</p>
-            </div>
-            
-            <div class="card">
-                <h3>🎯 Make Prediction</h3>
-                <button onclick="predict()">Predict Tomorrow's Temperature</button>
-                <div id="prediction"></div>
-            </div>
-            
-            <div class="card">
-                <h3>📊 Add Temperature Data</h3>
-                <input type="number" id="temp" placeholder="Temperature (°C)" step="0.1">
-                <input type="number" id="humidity" placeholder="Humidity (%)" step="0.1">
-                <input type="number" id="pressure" placeholder="Pressure (hPa)" step="0.1">
-                <button onclick="addData()">Add Data</button>
-            </div>
-            
-            <script>
-                async function predict() {
-                    document.getElementById('prediction').innerHTML = '🔄 Making prediction...';
-                    try {
-                        const res = await fetch('/api/predict/next-day', { method: 'POST' });
-                        const data = await res.json();
-                        document.getElementById('prediction').innerHTML = 
-                            '<h4>Tomorrow: ' + data.predicted_temperature + '°C</h4>' +
-                            '<p>Confidence: ' + Math.round(data.confidence * 100) + '%</p>' +
-                            '<p>Prediction ID: #' + data.prediction_id + '</p>';
-                    } catch (err) {
-                        document.getElementById('prediction').innerHTML = '❌ Error: ' + err.message;
-                    }
-                }
-                
-                async function addData() {
-                    const temp = document.getElementById('temp').value;
-                    const humidity = document.getElementById('humidity').value;
-                    const pressure = document.getElementById('pressure').value;
-                    
-                    if (!temp) return alert('Temperature is required');
-                    
-                    try {
-                        const res = await fetch('/api/temperature', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ 
-                                temperature: parseFloat(temp),
-                                humidity: parseFloat(humidity) || null,
-                                pressure: parseFloat(pressure) || null
-                            })
-                        });
-                        
-                        if (res.ok) {
-                            alert('✅ Data added successfully!');
-                            document.getElementById('temp').value = '';
-                            document.getElementById('humidity').value = '';
-                            document.getElementById('pressure').value = '';
-                        }
-                    } catch (err) {
-                        alert('❌ Error adding data');
-                    }
-                }
-            </script>
-        </body>
-        </html>
-    `);
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Fallback route for missing index.html
+app.get('/dashboard', (req, res) => {
+    res.send('<h1>Please create public/index.html file</h1><p>The frontend should be in public/index.html</p>');
 });
 
 // Start server
 async function startServer() {
     try {
-        console.log('🌡️ Starting Temperature Prediction System...');
+        console.log('Starting Temperature Prediction System...');
         
         await initDB();
         await createModel();
         
         const trained = await trainModel();
         if (trained) {
-            console.log('🎯 Model trained successfully');
+            console.log('Model trained successfully');
         } else {
-            console.log('⚠️ Model training incomplete - insufficient data');
+            console.log('Model ready - add data to train');
         }
         
         app.listen(PORT, () => {
-            console.log(`\n🚀 Server running on port ${PORT}`);
-            console.log(`🗄️ Database: ${useMemoryFallback ? 'In-Memory' : 'Azure SQL (strato_db)'}`);
-            console.log(`🧠 AI Model: ${model ? 'Ready' : 'Loading...'}`);
-            console.log(`🌐 Dashboard: http://localhost:${PORT}`);
-            console.log(`🔍 Health: http://localhost:${PORT}/api/health`);
+            console.log(`\nServer running on port ${PORT}`);
+            console.log(`Database: ${useMemoryFallback ? 'In-Memory' : 'Azure SQL (strato_db)'}`);
+            console.log(`AI Model: ${model ? 'Ready' : 'Loading...'}`);
+            console.log(`Dashboard: http://localhost:${PORT}`);
+            console.log(`Health: http://localhost:${PORT}/api/health`);
         });
         
     } catch (err) {
-        console.error('❌ Failed to start server:', err.message);
+        console.error('Failed to start server:', err.message);
         process.exit(1);
     }
 }
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-    console.log('\n🔄 Shutting down...');
-    if (useMemoryFallback) await saveMemoryData();
-    if (pool) await pool.close();
-    console.log('✅ Shutdown complete');
-    process.exit(0);
-});
-
-// Auto-save for memory mode
-if (process.env.NODE_ENV !== 'production') {
-    setInterval(() => {
-        if (useMemoryFallback) saveMemoryData();
-    }, 5 * 60 * 1000);
-}
-
 startServer();
+startWeatherUpdates();
+
+//

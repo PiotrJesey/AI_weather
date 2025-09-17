@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Temperature Prediction System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333; min-height: 100vh; padding: 20px;
+        }
+        
+        .container { max-width: 1400px; margin: 0 auto; }
+        
+        .header { 
+            text-align: center; margin-bottom: 30px; color: white; 
+            background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .header h1 { font-size: 2.5rem; margin-bottom: 10px; }
+        .header p { font-size: 1.1rem; opacity: 0.9; }
+        
+        .system-status { 
+            margin-top: 15px; padding: 10px 20px; border-radius: 20px; 
+            background: rgba(255,255,255,0.2); display: inline-block;
+        }
+        
+        .dashboard { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+            gap: 20px; margin-bottom: 30px; 
+        }
+        
+        .card { 
+            background: rgba(255,255,255,0.95); border-radius: 15px; padding: 25px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 15px 40px rgba(0,0,0,0.15); }
+        .card h3 { margin-bottom: 20px; color: #4a5568; font-size: 1.3rem; }
+        
+        .btn { 
+            background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; 
+            padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600;
+            margin: 8px; transition: all 0.3s ease; font-size: 14px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.4); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        
+        .btn-secondary { background: linear-gradient(45deg, #718096, #4a5568); }
+        .btn-success { background: linear-gradient(45deg, #48bb78, #38a169); }
+        .btn-danger { background: linear-gradient(45deg, #f56565, #e53e3e); }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #4a5568; }
+        .form-group input { 
+            width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 6px; 
+            font-size: 16px; transition: border-color 0.3s ease;
+        }
+        .form-group input:focus { outline: none; border-color: #667eea; }
+        
+        .result { 
+            margin: 15px 0; padding: 15px; border-radius: 8px; font-weight: 600;
+            display: none; animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .result.success { background: #c6f6d5; color: #22543d; }
+        .result.error { background: #fed7d7; color: #c53030; }
+        .result.info { background: #bee3f8; color: #2a69ac; }
+        
+        .prediction-display { 
+            background: linear-gradient(45deg, #48bb78, #38a169); color: white; 
+            padding: 20px; border-radius: 10px; text-align: center; margin: 15px 0;
+            display: none;
+        }
+        .prediction-temp { font-size: 2.5rem; font-weight: bold; margin: 10px 0; }
+        .prediction-details { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); 
+            gap: 10px; margin-top: 15px; font-size: 0.9rem;
+        }
+        .prediction-detail { background: rgba(255,255,255,0.2); padding: 8px; border-radius: 5px; }
+        
+        .analytics-grid { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); 
+            gap: 15px; margin: 20px 0; 
+        }
+        .stat-card { 
+            background: linear-gradient(45deg, #667eea, #764ba2); color: white; 
+            padding: 20px; border-radius: 10px; text-align: center;
+        }
+        .stat-value { font-size: 2rem; font-weight: bold; display: block; }
+        .stat-label { font-size: 0.9rem; opacity: 0.9; }
+        
+        .chart-container { height: 300px; margin: 20px 0; position: relative; }
+        .chart-container canvas { background: white; border-radius: 10px; }
+        
+        .predictions-list { max-height: 400px; overflow-y: auto; }
+        .prediction-item { 
+            background: #f8fafc; margin: 8px 0; padding: 12px; border-radius: 6px; 
+            border-left: 4px solid #667eea; display: flex; justify-content: space-between; 
+            align-items: center; font-size: 0.9rem;
+        }
+        .prediction-item.evaluated { border-left-color: #48bb78; }
+        .prediction-item.pending { border-left-color: #ed8936; }
+        
+        .status-badge { 
+            padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;
+        }
+        .status-badge.pending { background: #fef5e7; color: #c05621; }
+        .status-badge.evaluated { background: #c6f6d5; color: #22543d; }
+        
+        .wide-card { grid-column: 1 / -1; }
+        .loading { text-align: center; color: #718096; padding: 20px; }
+        
+        /* Weather-specific styles */
+        .weather-info { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 20px; border-radius: 10px; margin: 15px 0;
+        }
+        .weather-main { text-align: center; margin-bottom: 15px; }
+        .weather-temp { font-size: 3rem; font-weight: bold; display: block; }
+        .weather-location { font-size: 1.1rem; opacity: 0.9; }
+        .weather-details { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); 
+            gap: 10px; margin: 15px 0; 
+        }
+        .weather-item { 
+            background: rgba(255,255,255,0.2); padding: 10px; border-radius: 6px; 
+            text-align: center; font-size: 0.9rem;
+        }
+        .weather-label { display: block; font-size: 0.8rem; opacity: 0.8; }
+        .weather-value { display: block; font-weight: bold; font-size: 1rem; }
+        .weather-timestamp { text-align: center; font-size: 0.8rem; opacity: 0.8; margin-top: 10px; }
+        .weather-error { 
+            text-align: center; padding: 20px; color: #e53e3e; 
+            background: #fed7d7; border-radius: 8px; margin: 15px 0;
+        }
+        .weather-error a { color: #3182ce; text-decoration: underline; }
+        
+        .tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+        .tab { 
+            padding: 12px 24px; background: none; border: none; cursor: pointer; 
+            font-weight: 600; color: #718096; border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .tab.active, .tab:hover { color: #667eea; border-bottom-color: #667eea; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .evaluation-form { 
+            background: #f8fafc; padding: 15px; border-radius: 8px; margin: 10px 0; 
+        }
+        .evaluation-form input { width: auto; margin: 0 10px; }
+        
+        @media (max-width: 768px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .header h1 { font-size: 2rem; }
+            .container { padding: 10px; }
+            .prediction-details { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI Temperature Prediction System</h1>
+            <p>Advanced Machine Learning with Real-time Analytics</p>
+            <div id="system-status" class="system-status">
+                <span id="status-text">Loading system status...</span>
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <!-- Current Weather Card -->
+            <div class="card">
+                <h3>🌤️ Current Weather</h3>
+                <div id="weather-display">
+                    <div class="loading">Loading weather data...</div>
+                </div>
+                <button class="btn" onclick="getCurrentWeather()">🔄 Refresh Weather</button>
+                <button class="btn btn-success" onclick="saveCurrentWeather()">💾 Save to Database</button>
+                
+                <div id="weather-result" class="result"></div>
+            </div>
+
+            <!-- Add Data Card -->
+            <div class="card">
+                <h3>📊 Add Temperature Data</h3>
+                <div class="form-group">
+                    <label for="temp">Temperature (°C) *</label>
+                    <input type="number" id="temp" step="0.1" placeholder="25.5" required>
+                </div>
+                <div class="form-group">
+                    <label for="humidity">Humidity (%)</label>
+                    <input type="number" id="humidity" step="0.1" placeholder="65">
+                </div>
+                <div class="form-group">
+                    <label for="pressure">Pressure (hPa)</label>
+                    <input type="number" id="pressure" step="0.1" placeholder="1013">
+                </div>
+                <div class="form-group">
+                    <label for="wind_speed">Wind Speed (km/h)</label>
+                    <input type="number" id="wind_speed" step="0.1" placeholder="10">
+                </div>
+                <div class="form-group">
+                    <label for="cloud_cover">Cloud Cover (%)</label>
+                    <input type="number" id="cloud_cover" step="0.1" placeholder="50">
+                </div>
+                <button class="btn btn-success" onclick="addData()">📈 Add Data</button>
+                <button class="btn btn-secondary" onclick="loadHistoricalData()">🔄 Refresh</button>
+                
+                <div id="add-data-result" class="result"></div>
+            </div>
+
+            <!-- Prediction Card -->
+            <div class="card">
+                <h3>🔮 AI Predictions</h3>
+                <button class="btn" onclick="predictNextDay()">🎯 Predict Tomorrow</button>
+                <button class="btn btn-secondary" onclick="retrainModel()">🧠 Retrain Model</button>
+                
+                <div id="prediction-display" class="prediction-display">
+                    <div class="prediction-temp" id="prediction-temp">--°C</div>
+                    <div id="prediction-text">Tomorrow's Temperature</div>
+                    <div class="prediction-details" id="prediction-details">
+                        <div class="prediction-detail">
+                            <div><strong>Confidence</strong></div>
+                            <div id="confidence">--%</div>
+                        </div>
+                        <div class="prediction-detail">
+                            <div><strong>ID</strong></div>
+                            <div id="pred-id">--</div>
+                        </div>
+                        <div class="prediction-detail">
+                            <div><strong>Date</strong></div>
+                            <div id="pred-date">--</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="prediction-result" class="result"></div>
+            </div>
+
+            <!-- Correction/Evaluation Card -->
+            <div class="card">
+                <h3>📈 Model Learning & Correction</h3>
+                <p style="color: #666; margin-bottom: 15px;">
+                    Help the AI learn by providing actual temperature values for previous predictions.
+                </p>
+                
+                <div class="evaluation-form">
+                    <div class="form-group">
+                        <label for="pred-id-eval">Prediction ID</label>
+                        <input type="number" id="pred-id-eval" placeholder="e.g., 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="actual-temp">Actual Temperature (°C)</label>
+                        <input type="number" id="actual-temp" step="0.1" placeholder="e.g., 24.5">
+                    </div>
+                    <button class="btn btn-success" onclick="evaluatePrediction()">✅ Submit Correction</button>
+                </div>
+                
+                <div id="evaluation-result" class="result"></div>
+            </div>
+
+            <!-- Analytics Card -->
+            <div class="card wide-card">
+                <div class="tabs">
+                    <button class="tab active" onclick="showTab('analytics')">📊 Analytics</button>
+                    <button class="tab" onclick="showTab('predictions')">🔮 Predictions</button>
+                    <button class="tab" onclick="showTab('chart')">📈 Chart</button>
+                </div>
+
+                <div id="analytics-content" class="tab-content active">
+                    <h3>System Analytics</h3>
+                    <div class="analytics-grid" id="analytics-grid">
+                        <div class="stat-card">
+                            <span class="stat-value" id="total-data">0</span>
+                            <span class="stat-label">Data Points</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="total-predictions">0</span>
+                            <span class="stat-label">Predictions</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="avg-error">0</span>
+                            <span class="stat-label">Avg Error</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="accuracy">0%</span>
+                            <span class="stat-label">Accuracy</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="predictions-content" class="tab-content">
+                    <h3>Recent Predictions</h3>
+                    <div class="predictions-list" id="predictions-list">
+                        <div class="loading">Loading predictions...</div>
+                    </div>
+                </div>
+
+                <div id="chart-content" class="tab-content">
+                    <h3>Temperature Trends</h3>
+                    <div class="chart-container">
+                        <canvas id="temperature-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
+
+       
