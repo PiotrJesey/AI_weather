@@ -4,6 +4,8 @@ const sql = require('mssql');
 const tf = require('@tensorflow/tfjs-node');
 const fs = require('fs').promises;
 const https = require('https');
+const csv = require('csv-parser');
+const multer = require('multer');
 require('dotenv').config();
 
 const app = express();
@@ -13,6 +15,19 @@ const PORT = process.env.PORT || 3001;
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
 const WEATHER_CITY = process.env.WEATHER_CITY || 'Jersey';
 const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather';
+
+// Configure multer for file uploads
+const upload = multer({ 
+    dest: 'uploads/',
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only CSV files are allowed'));
+        }
+    }
+});
 
 app.use(cors());
 app.use(express.json());
@@ -68,7 +83,7 @@ async function initDB() {
     }
 }
 
-// Create tables
+// Create tables - Enhanced schema with manual evaluation support
 async function createTables() {
     const tables = [
         {
@@ -102,7 +117,8 @@ async function createTables() {
                     model_version VARCHAR(50) DEFAULT 'v2.0',
                     prediction_type VARCHAR(20) DEFAULT 'single',
                     days_ahead INT DEFAULT 1,
-                    auto_evaluated BIT DEFAULT 0
+                    auto_evaluated BIT DEFAULT 0,
+                    created_at DATETIME2 DEFAULT GETDATE()
                 )
             `
         },
@@ -118,7 +134,11 @@ async function createTables() {
                     absolute_error FLOAT NOT NULL,
                     percentage_error FLOAT NOT NULL,
                     evaluation_date DATETIME2 DEFAULT GETDATE(),
-                    evaluation_type VARCHAR(20) DEFAULT 'manual'
+                    evaluation_type VARCHAR(20) DEFAULT 'manual',
+                    accuracy_category VARCHAR(20),
+                    notes TEXT,
+                    created_at DATETIME2 DEFAULT GETDATE(),
+                    FOREIGN KEY (prediction_id) REFERENCES predictions(id)
                 )
             `
         }
@@ -134,7 +154,7 @@ async function createTables() {
     }
 }
 
-// Weather API
+// Weather API functions (keeping existing code)
 async function fetchWeatherData() {
     return new Promise((resolve, reject) => {
         if (!WEATHER_API_KEY) {
@@ -185,15 +205,14 @@ async function fetchWeatherData() {
     });
 }
 
-// Generate fallback weather data
 function generateFallbackWeather() {
-    const baseTemp = 18 + (Math.random() * 8); // 18-26°C
+    const baseTemp = 18 + (Math.random() * 8);
     return {
         temperature: Math.round(baseTemp * 10) / 10,
-        humidity: 50 + Math.round(Math.random() * 30), // 50-80%
-        pressure: 1003 + Math.round(Math.random() * 20), // 1003-1023 hPa
-        wind_speed: Math.round(Math.random() * 15 * 10) / 10, // 0-15 km/h
-        cloud_cover: Math.round(Math.random() * 100), // 0-100%
+        humidity: 50 + Math.round(Math.random() * 30),
+        pressure: 1003 + Math.round(Math.random() * 20),
+        wind_speed: Math.round(Math.random() * 15 * 10) / 10,
+        cloud_cover: Math.round(Math.random() * 100),
         weather_description: 'simulated data',
         city: WEATHER_CITY || 'Demo City',
         country: 'Demo',
@@ -201,7 +220,16 @@ function generateFallbackWeather() {
     };
 }
 
-// Auto-comparison system
+// Helper function to determine accuracy category
+function getAccuracyCategory(absoluteError) {
+    if (absoluteError <= 1.0) return 'excellent';
+    if (absoluteError <= 2.0) return 'good';
+    if (absoluteError <= 3.0) return 'fair';
+    if (absoluteError <= 5.0) return 'poor';
+    return 'very_poor';
+}
+
+// Auto-comparison system (keeping existing with enhancements)
 async function autoComparePredictions() {
     try {
         console.log('🔍 Running auto-comparison check...');
@@ -228,7 +256,7 @@ async function autoComparePredictions() {
         
         for (const prediction of pendingPredictions) {
             const targetDate = new Date(prediction.target_date);
-            const tolerance = 2 * 60 * 60 * 1000; // 2 hours tolerance
+            const tolerance = 2 * 60 * 60 * 1000;
             
             let actualData;
             if (useMemoryFallback) {
@@ -249,8 +277,8 @@ async function autoComparePredictions() {
             if (actualData) {
                 const error = Math.abs(actualData.temperature - prediction.predicted_temperature);
                 const percentageError = (error / Math.abs(actualData.temperature)) * 100;
+                const accuracyCategory = getAccuracyCategory(error);
                 
-                // Save evaluation
                 if (useMemoryFallback) {
                     predictionAccuracy.push({
                         id: predictionAccuracy.length + 1,
@@ -260,7 +288,8 @@ async function autoComparePredictions() {
                         absolute_error: error,
                         percentage_error: percentageError,
                         evaluation_date: new Date().toISOString(),
-                        evaluation_type: 'auto'
+                        evaluation_type: 'auto',
+                        accuracy_category: accuracyCategory
                     });
                     
                     const predIndex = predictions.findIndex(p => p.id === prediction.id);
@@ -273,10 +302,11 @@ async function autoComparePredictions() {
                         .input('predicted_temperature', sql.Float, prediction.predicted_temperature)
                         .input('absolute_error', sql.Float, error)
                         .input('percentage_error', sql.Float, percentageError)
+                        .input('accuracy_category', sql.VarChar(20), accuracyCategory)
                         .query(`
                             INSERT INTO prediction_accuracy 
-                            (prediction_id, actual_temperature, predicted_temperature, absolute_error, percentage_error, evaluation_type) 
-                            VALUES (@prediction_id, @actual_temperature, @predicted_temperature, @absolute_error, @percentage_error, 'auto')
+                            (prediction_id, actual_temperature, predicted_temperature, absolute_error, percentage_error, evaluation_type, accuracy_category) 
+                            VALUES (@prediction_id, @actual_temperature, @predicted_temperature, @absolute_error, @percentage_error, 'auto', @accuracy_category)
                         `);
                     
                     await pool.request()
@@ -284,7 +314,7 @@ async function autoComparePredictions() {
                         .query('UPDATE predictions SET auto_evaluated = 1 WHERE id = @id');
                 }
                 
-                console.log(`✅ Auto-evaluated prediction #${prediction.id}: ${error.toFixed(2)}°C error`);
+                console.log(`✅ Auto-evaluated prediction #${prediction.id}: ${error.toFixed(2)}°C error (${accuracyCategory})`);
             }
         }
     } catch (error) {
@@ -292,7 +322,7 @@ async function autoComparePredictions() {
     }
 }
 
-// AI Model
+// AI Model functions (keeping existing)
 async function createModel() {
     try {
         model = tf.sequential({
@@ -318,7 +348,6 @@ async function createModel() {
     }
 }
 
-// Train model
 async function trainModel() {
     try {
         let data;
@@ -342,7 +371,6 @@ async function trainModel() {
             return false;
         }
         
-        // Feature engineering
         const processedData = [];
         for (let i = 5; i < data.length; i++) {
             const current = data[i];
@@ -356,14 +384,12 @@ async function trainModel() {
             });
         }
         
-        // Normalization
         const temps = processedData.map(d => d.temperature);
         const tempMean = temps.reduce((a, b) => a + b) / temps.length;
         const tempStd = Math.sqrt(temps.map(t => (t - tempMean) ** 2).reduce((a, b) => a + b) / temps.length);
         
         normalizationParams = { tempMean, tempStd };
         
-        // Prepare features
         const features = processedData.map(d => [
             (d.prev_temp - tempMean) / tempStd,
             d.humidity / 100,
@@ -376,7 +402,6 @@ async function trainModel() {
         
         const labels = processedData.map(d => (d.temperature - tempMean) / tempStd);
         
-        // Train
         await model.fit(
             tf.tensor2d(features), 
             tf.tensor2d(labels, [labels.length, 1]), 
@@ -397,7 +422,6 @@ async function trainModel() {
     }
 }
 
-// Prediction function
 async function makePrediction(targetDate, daysAhead = 1) {
     if (!model || !normalizationParams.tempMean) {
         throw new Error('Model not ready - train the model first');
@@ -448,7 +472,7 @@ async function makePrediction(targetDate, daysAhead = 1) {
     };
 }
 
-// Memory management
+// Memory management (keeping existing)
 async function loadMemoryData() {
     try {
         const data = JSON.parse(await fs.readFile('strato_data.json', 'utf8'));
@@ -478,9 +502,9 @@ async function saveMemoryData() {
     }
 }
 
-// API Routes
+// ===== API ROUTES =====
 
-// Health check
+// Health check (enhanced)
 app.get('/api/health', async (req, res) => {
     try {
         let stats;
@@ -490,7 +514,13 @@ app.get('/api/health', async (req, res) => {
                 total_records: temperatureData.length, 
                 predictions: predictions.length,
                 accuracy_records: predictionAccuracy.length,
-                auto_evaluated: predictionAccuracy.filter(acc => acc.evaluation_type === 'auto').length
+                auto_evaluated: predictionAccuracy.filter(acc => acc.evaluation_type === 'auto').length,
+                manual_evaluated: predictionAccuracy.filter(acc => acc.evaluation_type === 'manual').length,
+                pending_evaluations: predictions.filter(p => {
+                    const targetDate = new Date(p.target_date);
+                    return targetDate <= new Date() && 
+                           !predictionAccuracy.some(acc => acc.prediction_id === p.id);
+                }).length
             };
         } else {
             try {
@@ -499,7 +529,11 @@ app.get('/api/health', async (req, res) => {
                         (SELECT COUNT(*) FROM temperature_data) as total_records,
                         (SELECT COUNT(*) FROM predictions) as predictions,
                         (SELECT COUNT(*) FROM prediction_accuracy) as accuracy_records,
-                        (SELECT COUNT(*) FROM prediction_accuracy WHERE evaluation_type = 'auto') as auto_evaluated
+                        (SELECT COUNT(*) FROM prediction_accuracy WHERE evaluation_type = 'auto') as auto_evaluated,
+                        (SELECT COUNT(*) FROM prediction_accuracy WHERE evaluation_type = 'manual') as manual_evaluated,
+                        (SELECT COUNT(*) FROM predictions p 
+                         LEFT JOIN prediction_accuracy pa ON p.id = pa.prediction_id 
+                         WHERE p.target_date <= GETDATE() AND pa.id IS NULL) as pending_evaluations
                 `);
                 stats = result.recordset[0];
             } catch (dbError) {
@@ -526,7 +560,491 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
-// Weather API
+// Get analytics (enhanced)
+app.get('/api/analytics', async (req, res) => {
+    try {
+        let data, accuracyData, pendingPredictions;
+        
+        if (useMemoryFallback) {
+            data = temperatureData;
+            accuracyData = predictionAccuracy;
+            pendingPredictions = predictions.filter(p => {
+                const targetDate = new Date(p.target_date);
+                return targetDate <= new Date() && 
+                       !predictionAccuracy.some(acc => acc.prediction_id === p.id);
+            });
+        } else {
+            const tempResult = await pool.request().query('SELECT * FROM temperature_data ORDER BY date_time');
+            const accResult = await pool.request().query('SELECT * FROM prediction_accuracy ORDER BY evaluation_date');
+            const pendingResult = await pool.request().query(`
+                SELECT p.* FROM predictions p
+                LEFT JOIN prediction_accuracy pa ON p.id = pa.prediction_id
+                WHERE p.target_date <= GETDATE() AND pa.id IS NULL
+            `);
+            
+            data = tempResult.recordset;
+            accuracyData = accResult.recordset;
+            pendingPredictions = pendingResult.recordset;
+        }
+        
+        const analytics = {
+            total_data_points: data.length,
+            total_predictions: accuracyData.length,
+            average_error: accuracyData.length > 0 ? 
+                accuracyData.reduce((sum, a) => sum + a.absolute_error, 0) / accuracyData.length : 0,
+            recent_accuracy: accuracyData.slice(-10).length > 0 ?
+                accuracyData.slice(-10).reduce((sum, a) => sum + (100 - a.percentage_error), 0) / accuracyData.slice(-10).length : 0,
+            auto_evaluations: accuracyData.filter(a => a.evaluation_type === 'auto').length,
+            manual_evaluations: accuracyData.filter(a => a.evaluation_type === 'manual').length,
+            pending_evaluations: pendingPredictions.length,
+            accuracy_breakdown: {
+                excellent: accuracyData.filter(a => a.accuracy_category === 'excellent').length,
+                good: accuracyData.filter(a => a.accuracy_category === 'good').length,
+                fair: accuracyData.filter(a => a.accuracy_category === 'fair').length,
+                poor: accuracyData.filter(a => a.accuracy_category === 'poor').length,
+                very_poor: accuracyData.filter(a => a.accuracy_category === 'very_poor').length
+            }
+        };
+        
+        res.json(analytics);
+    } catch (error) {
+        console.error('Analytics error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// NEW: Get predictions pending evaluation
+app.get('/api/predictions/pending-evaluation', async (req, res) => {
+    try {
+        let pendingPredictions;
+        
+        if (useMemoryFallback) {
+            pendingPredictions = predictions.filter(pred => {
+                const targetDate = new Date(pred.target_date);
+                return targetDate <= new Date() && 
+                       !predictionAccuracy.some(acc => acc.prediction_id === pred.id);
+            }).sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+        } else {
+            const result = await pool.request().query(`
+                SELECT p.* FROM predictions p
+                LEFT JOIN prediction_accuracy pa ON p.id = pa.prediction_id
+                WHERE p.target_date <= GETDATE() AND pa.id IS NULL
+                ORDER BY p.target_date ASC
+            `);
+            pendingPredictions = result.recordset;
+        }
+        
+        res.json(pendingPredictions);
+    } catch (error) {
+        console.error('Pending evaluations error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// NEW: Evaluate specific prediction
+app.post('/api/predictions/:id/evaluate', async (req, res) => {
+    try {
+        const predictionId = parseInt(req.params.id);
+        const { actual_temperature, evaluation_type = 'manual', notes } = req.body;
+        
+        if (!predictionId || typeof actual_temperature !== 'number') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Invalid prediction ID or actual temperature' 
+            });
+        }
+        
+        if (actual_temperature < -50 || actual_temperature > 60) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Actual temperature seems unrealistic (-50°C to 60°C expected)' 
+            });
+        }
+        
+        // Get prediction
+        let prediction;
+        if (useMemoryFallback) {
+            prediction = predictions.find(p => p.id === predictionId);
+        } else {
+            const result = await pool.request()
+                .input('id', sql.Int, predictionId)
+                .query('SELECT * FROM predictions WHERE id = @id');
+            prediction = result.recordset[0];
+        }
+        
+        if (!prediction) {
+            return res.status(404).json({ success: false, error: 'Prediction not found' });
+        }
+        
+        // Check if already evaluated
+        let existingEvaluation;
+        if (useMemoryFallback) {
+            existingEvaluation = predictionAccuracy.find(acc => acc.prediction_id === predictionId);
+        } else {
+            const result = await pool.request()
+                .input('prediction_id', sql.Int, predictionId)
+                .query('SELECT * FROM prediction_accuracy WHERE prediction_id = @prediction_id');
+            existingEvaluation = result.recordset[0];
+        }
+        
+        if (existingEvaluation) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Prediction has already been evaluated' 
+            });
+        }
+        
+        const error = Math.abs(actual_temperature - prediction.predicted_temperature);
+        const percentageError = (error / Math.abs(actual_temperature)) * 100;
+        const accuracyCategory = getAccuracyCategory(error);
+        
+        // Save evaluation
+        if (useMemoryFallback) {
+            predictionAccuracy.push({
+                id: predictionAccuracy.length + 1,
+                prediction_id: predictionId,
+                actual_temperature,
+                predicted_temperature: prediction.predicted_temperature,
+                absolute_error: error,
+                percentage_error: percentageError,
+                evaluation_date: new Date().toISOString(),
+                evaluation_type,
+                accuracy_category,
+                notes: notes || null
+            });
+            await saveMemoryData();
+        } else {
+            await pool.request()
+                .input('prediction_id', sql.Int, predictionId)
+                .input('actual_temperature', sql.Float, actual_temperature)
+                .input('predicted_temperature', sql.Float, prediction.predicted_temperature)
+                .input('absolute_error', sql.Float, error)
+                .input('percentage_error', sql.Float, percentageError)
+                .input('evaluation_type', sql.VarChar(20), evaluation_type)
+                .input('accuracy_category', sql.VarChar(20), accuracyCategory)
+                .input('notes', sql.Text, notes || null)
+                .query(`
+                    INSERT INTO prediction_accuracy 
+                    (prediction_id, actual_temperature, predicted_temperature, absolute_error, 
+                     percentage_error, evaluation_type, accuracy_category, notes) 
+                    VALUES (@prediction_id, @actual_temperature, @predicted_temperature, 
+                            @absolute_error, @percentage_error, @evaluation_type, @accuracy_category, @notes)
+                `);
+        }
+        
+        res.json({
+            success: true,
+            prediction_id: predictionId,
+            predicted_temperature: prediction.predicted_temperature,
+            actual_temperature,
+            absolute_error: Math.round(error * 100) / 100,
+            percentage_error: Math.round(percentageError * 100) / 100,
+            accuracy_category: accuracyCategory,
+            evaluation_type
+        });
+    } catch (error) {
+        console.error('Evaluation error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// NEW: Evaluate prediction by target date
+app.post('/api/predictions/evaluate-by-date', async (req, res) => {
+    try {
+        const { target_date, actual_temperature, evaluation_type = 'manual_quick' } = req.body;
+        
+        if (!target_date || typeof actual_temperature !== 'number') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Invalid target date or actual temperature' 
+            });
+        }
+        
+        const targetDate = new Date(target_date);
+        
+        // Find predictions for this date
+        let matchingPredictions;
+        if (useMemoryFallback) {
+            matchingPredictions = predictions.filter(pred => {
+                const predTargetDate = new Date(pred.target_date);
+                return Math.abs(predTargetDate - targetDate) < 24 * 60 * 60 * 1000 && // Same day
+                       !predictionAccuracy.some(acc => acc.prediction_id === pred.id);
+            });
+        } else {
+            const result = await pool.request()
+                .input('target_date', sql.DateTime2, targetDate)
+                .query(`
+                    SELECT p.* FROM predictions p
+                    LEFT JOIN prediction_accuracy pa ON p.id = pa.prediction_id
+                    WHERE CAST(p.target_date AS DATE) = CAST(@target_date AS DATE) 
+                    AND pa.id IS NULL
+                `);
+            matchingPredictions = result.recordset;
+        }
+        
+        if (matchingPredictions.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'No unevaluated predictions found for this date' 
+            });
+        }
+        
+        let evaluatedCount = 0;
+        
+        for (const prediction of matchingPredictions) {
+            const error = Math.abs(actual_temperature - prediction.predicted_temperature);
+            const percentageError = (error / Math.abs(actual_temperature)) * 100;
+            const accuracyCategory = getAccuracyCategory(error);
+            
+            if (useMemoryFallback) {
+                predictionAccuracy.push({
+                    id: predictionAccuracy.length + 1,
+                    prediction_id: prediction.id,
+                    actual_temperature,
+                    predicted_temperature: prediction.predicted_temperature,
+                    absolute_error: error,
+                    percentage_error: percentageError,
+                    evaluation_date: new Date().toISOString(),
+                    evaluation_type,
+                    accuracy_category
+                });
+                evaluatedCount++;
+            } else {
+                await pool.request()
+                    .input('prediction_id', sql.Int, prediction.id)
+                    .input('actual_temperature', sql.Float, actual_temperature)
+                    .input('predicted_temperature', sql.Float, prediction.predicted_temperature)
+                    .input('absolute_error', sql.Float, error)
+                    .input('percentage_error', sql.Float, percentageError)
+                    .input('evaluation_type', sql.VarChar(20), evaluation_type)
+                    .input('accuracy_category', sql.VarChar(20), accuracyCategory)
+                    .query(`
+                        INSERT INTO prediction_accuracy 
+                        (prediction_id, actual_temperature, predicted_temperature, absolute_error, 
+                         percentage_error, evaluation_type, accuracy_category) 
+                        VALUES (@prediction_id, @actual_temperature, @predicted_temperature, 
+                                @absolute_error, @percentage_error, @evaluation_type, @accuracy_category)
+                    `);
+                evaluatedCount++;
+            }
+        }
+        
+        if (useMemoryFallback) {
+            await saveMemoryData();
+        }
+        
+        res.json({
+            success: true,
+            evaluated_count: evaluatedCount,
+            target_date: target_date,
+            actual_temperature
+        });
+    } catch (error) {
+        console.error('Date evaluation error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// NEW: Export evaluation data
+app.get('/api/predictions/export-evaluations', async (req, res) => {
+    try {
+        let evaluationData;
+        
+        if (useMemoryFallback) {
+            evaluationData = predictionAccuracy.map(acc => {
+                const prediction = predictions.find(p => p.id === acc.prediction_id);
+                return {
+                    prediction_id: acc.prediction_id,
+                    prediction_date: prediction ? prediction.prediction_date : 'Unknown',
+                    target_date: prediction ? prediction.target_date : 'Unknown',
+                    predicted_temperature: acc.predicted_temperature,
+                    actual_temperature: acc.actual_temperature,
+                    absolute_error: acc.absolute_error,
+                    percentage_error: acc.percentage_error,
+                    accuracy_category: acc.accuracy_category,
+                    evaluation_type: acc.evaluation_type,
+                    evaluation_date: acc.evaluation_date,
+                    notes: acc.notes || ''
+                };
+            });
+        } else {
+            const result = await pool.request().query(`
+                SELECT 
+                    pa.prediction_id,
+                    p.prediction_date,
+                    p.target_date,
+                    pa.predicted_temperature,
+                    pa.actual_temperature,
+                    pa.absolute_error,
+                    pa.percentage_error,
+                    pa.accuracy_category,
+                    pa.evaluation_type,
+                    pa.evaluation_date,
+                    pa.notes
+                FROM prediction_accuracy pa
+                JOIN predictions p ON pa.prediction_id = p.id
+                ORDER BY pa.evaluation_date DESC
+            `);
+            evaluationData = result.recordset;
+        }
+        
+        // Generate CSV
+        const csvHeader = 'prediction_id,prediction_date,target_date,predicted_temperature,actual_temperature,absolute_error,percentage_error,accuracy_category,evaluation_type,evaluation_date,notes\n';
+        const csvRows = evaluationData.map(row => {
+            return Object.values(row).map(value => {
+                if (value === null || value === undefined) return '';
+                if (typeof value === 'string' && value.includes(',')) return `"${value}"`;
+                return value;
+            }).join(',');
+        }).join('\n');
+        
+        const csv = csvHeader + csvRows;
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="temperature_predictions_export.csv"');
+        res.send(csv);
+    } catch (error) {
+        console.error('Export error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// NEW: Import evaluation data from CSV
+app.post('/api/predictions/import-evaluations', upload.single('evaluation_file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No file uploaded' });
+        }
+        
+        const csvData = [];
+        const results = { imported: 0, skipped: 0, errors: [] };
+        
+        // Read and parse CSV
+        const fileContent = await fs.readFile(req.file.path, 'utf8');
+        const lines = fileContent.split('\n');
+        
+        if (lines.length < 2) {
+            return res.status(400).json({ success: false, error: 'CSV file appears to be empty or invalid' });
+        }
+        
+        const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+        
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            const values = line.split(',');
+            const row = {};
+            
+            headers.forEach((header, index) => {
+                row[header] = values[index] ? values[index].replace(/"/g, '').trim() : null;
+            });
+            
+            if (row.prediction_id && row.actual_temperature) {
+                csvData.push(row);
+            }
+        }
+        
+        // Process each row
+        for (const row of csvData) {
+            try {
+                const predictionId = parseInt(row.prediction_id);
+                const actualTemp = parseFloat(row.actual_temperature);
+                
+                if (isNaN(predictionId) || isNaN(actualTemp)) {
+                    results.skipped++;
+                    continue;
+                }
+                
+                // Check if prediction exists and isn't already evaluated
+                let prediction, existingEvaluation;
+                
+                if (useMemoryFallback) {
+                    prediction = predictions.find(p => p.id === predictionId);
+                    existingEvaluation = predictionAccuracy.find(acc => acc.prediction_id === predictionId);
+                } else {
+                    const predResult = await pool.request()
+                        .input('id', sql.Int, predictionId)
+                        .query('SELECT * FROM predictions WHERE id = @id');
+                    prediction = predResult.recordset[0];
+                    
+                    const evalResult = await pool.request()
+                        .input('prediction_id', sql.Int, predictionId)
+                        .query('SELECT * FROM prediction_accuracy WHERE prediction_id = @prediction_id');
+                    existingEvaluation = evalResult.recordset[0];
+                }
+                
+                if (!prediction || existingEvaluation) {
+                    results.skipped++;
+                    continue;
+                }
+                
+                const error = Math.abs(actualTemp - prediction.predicted_temperature);
+                const percentageError = (error / Math.abs(actualTemp)) * 100;
+                const accuracyCategory = getAccuracyCategory(error);
+                
+                // Save evaluation
+                if (useMemoryFallback) {
+                    predictionAccuracy.push({
+                        id: predictionAccuracy.length + 1,
+                        prediction_id: predictionId,
+                        actual_temperature: actualTemp,
+                        predicted_temperature: prediction.predicted_temperature,
+                        absolute_error: error,
+                        percentage_error: percentageError,
+                        evaluation_date: new Date().toISOString(),
+                        evaluation_type: row.evaluation_type || 'manual_import',
+                        accuracy_category,
+                        notes: row.notes || 'Imported from CSV'
+                    });
+                } else {
+                    await pool.request()
+                        .input('prediction_id', sql.Int, predictionId)
+                        .input('actual_temperature', sql.Float, actualTemp)
+                        .input('predicted_temperature', sql.Float, prediction.predicted_temperature)
+                        .input('absolute_error', sql.Float, error)
+                        .input('percentage_error', sql.Float, percentageError)
+                        .input('evaluation_type', sql.VarChar(20), row.evaluation_type || 'manual_import')
+                        .input('accuracy_category', sql.VarChar(20), accuracyCategory)
+                        .input('notes', sql.Text, row.notes || 'Imported from CSV')
+                        .query(`
+                            INSERT INTO prediction_accuracy 
+                            (prediction_id, actual_temperature, predicted_temperature, absolute_error, 
+                             percentage_error, evaluation_type, accuracy_category, notes) 
+                            VALUES (@prediction_id, @actual_temperature, @predicted_temperature, 
+                                    @absolute_error, @percentage_error, @evaluation_type, @accuracy_category, @notes)
+                        `);
+                }
+                
+                results.imported++;
+            } catch (rowError) {
+                results.errors.push(`Row ${csvData.indexOf(row) + 2}: ${rowError.message}`);
+                results.skipped++;
+            }
+        }
+        
+        if (useMemoryFallback) {
+            await saveMemoryData();
+        }
+        
+        // Clean up uploaded file
+        await fs.unlink(req.file.path);
+        
+        res.json({
+            success: true,
+            imported_count: results.imported,
+            skipped_count: results.skipped,
+            error_count: results.errors.length,
+            errors: results.errors.slice(0, 10) // Limit error details
+        });
+        
+    } catch (error) {
+        console.error('Import error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Weather API routes (keeping existing)
 app.get('/api/weather/current', async (req, res) => {
     try {
         if (!WEATHER_API_KEY) {
@@ -555,7 +1073,6 @@ app.get('/api/weather/current', async (req, res) => {
     }
 });
 
-// Save weather data
 app.post('/api/weather/save', async (req, res) => {
     try {
         const weatherData = await fetchWeatherData();
@@ -598,7 +1115,7 @@ app.post('/api/weather/save', async (req, res) => {
     }
 });
 
-// Add temperature data
+// Temperature data routes
 app.post('/api/temperature', async (req, res) => {
     try {
         const { temperature, humidity, pressure, wind_speed, cloud_cover } = req.body;
@@ -643,7 +1160,30 @@ app.post('/api/temperature', async (req, res) => {
     }
 });
 
-// Single day prediction
+app.get('/api/temperature/historical', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        let result;
+        
+        if (useMemoryFallback) {
+            result = temperatureData
+                .sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
+                .slice(0, days * 6);
+        } else {
+            const dbResult = await pool.request()
+                .input('limit', sql.Int, days * 6)
+                .query(`SELECT TOP (@limit) * FROM temperature_data ORDER BY date_time DESC`);
+            result = dbResult.recordset;
+        }
+        
+        res.json(result.reverse());
+    } catch (error) {
+        console.error('Historical data error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Prediction routes
 app.post('/api/predict/next-day', async (req, res) => {
     try {
         const tomorrow = new Date();
@@ -652,7 +1192,6 @@ app.post('/api/predict/next-day', async (req, res) => {
         
         const prediction = await makePrediction(tomorrow, 1);
         
-        // Save prediction
         let predictionId;
         if (useMemoryFallback) {
             predictionId = predictions.length + 1;
@@ -694,7 +1233,6 @@ app.post('/api/predict/next-day', async (req, res) => {
     }
 });
 
-// 14-day prediction
 app.post('/api/predict/14-day', async (req, res) => {
     try {
         const results = [];
@@ -702,13 +1240,61 @@ app.post('/api/predict/14-day', async (req, res) => {
         startDate.setDate(startDate.getDate() + 1);
         startDate.setHours(12, 0, 0, 0);
         
+        const predictionDate = new Date();
+        let savedPredictions = [];
+        
+        console.log(`Starting 14-day prediction batch at ${predictionDate.toISOString()}`);
+        
         for (let day = 1; day <= 14; day++) {
             const targetDate = new Date(startDate);
             targetDate.setDate(startDate.getDate() + day - 1);
             
             const prediction = await makePrediction(targetDate, day);
             
+            let predictionId;
+            
+            if (useMemoryFallback) {
+                predictionId = (predictions.length || 0) + 1;
+                const predictionRecord = {
+                    id: predictionId,
+                    prediction_date: predictionDate.toISOString(),
+                    target_date: targetDate.toISOString(),
+                    predicted_temperature: prediction.predicted_temperature,
+                    confidence: prediction.confidence,
+                    model_version: 'v2.0',
+                    prediction_type: '14-day',
+                    days_ahead: day,
+                    auto_evaluated: false
+                };
+                
+                predictions.push(predictionRecord);
+                savedPredictions.push(predictionRecord);
+                
+            } else {
+                try {
+                    const dbResult = await pool.request()
+                        .input('prediction_date', sql.DateTime2, predictionDate)
+                        .input('target_date', sql.DateTime2, targetDate)
+                        .input('predicted_temperature', sql.Float, prediction.predicted_temperature)
+                        .input('confidence', sql.Float, prediction.confidence)
+                        .input('prediction_type', sql.VarChar(20), '14-day')
+                        .input('days_ahead', sql.Int, day)
+                        .query(`
+                            INSERT INTO predictions 
+                            (prediction_date, target_date, predicted_temperature, confidence, prediction_type, days_ahead) 
+                            OUTPUT INSERTED.id 
+                            VALUES (@prediction_date, @target_date, @predicted_temperature, @confidence, @prediction_type, @days_ahead)
+                        `);
+                    
+                    predictionId = dbResult.recordset[0]?.id || `temp-${day}`;
+                } catch (dbError) {
+                    console.error(`Database error saving prediction for day ${day}:`, dbError);
+                    predictionId = `error-${day}`;
+                }
+            }
+            
             results.push({
+                prediction_id: predictionId,
                 day: day,
                 date: targetDate.toISOString().split('T')[0],
                 predicted_temperature: prediction.predicted_temperature,
@@ -716,50 +1302,31 @@ app.post('/api/predict/14-day', async (req, res) => {
             });
         }
         
-        res.json({
-            success: true,
-            predictions: results,
-            total_predictions: results.length
-        });
-    } catch (error) {
-        console.error('14-day prediction error:', error.message);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// Get analytics
-app.get('/api/analytics', async (req, res) => {
-    try {
-        let data, accuracyData;
-        
         if (useMemoryFallback) {
-            data = temperatureData;
-            accuracyData = predictionAccuracy;
-        } else {
-            const tempResult = await pool.request().query('SELECT * FROM temperature_data ORDER BY date_time');
-            const accResult = await pool.request().query('SELECT * FROM prediction_accuracy ORDER BY evaluation_date');
-            data = tempResult.recordset;
-            accuracyData = accResult.recordset;
+            await saveMemoryData();
         }
         
-        const analytics = {
-            total_data_points: data.length,
-            total_predictions: accuracyData.length,
-            average_error: accuracyData.length > 0 ? 
-                accuracyData.reduce((sum, a) => sum + a.absolute_error, 0) / accuracyData.length : 0,
-            recent_accuracy: accuracyData.slice(-10).length > 0 ?
-                accuracyData.slice(-10).reduce((sum, a) => sum + (100 - a.percentage_error), 0) / accuracyData.slice(-10).length : 0,
-            auto_evaluations: accuracyData.filter(a => a.evaluation_type === 'auto').length
-        };
+        res.json({
+            success: true,
+            message: `Successfully created and saved 14-day forecast`,
+            prediction_batch_date: predictionDate.toISOString(),
+            predictions: results,
+            total_predictions: results.length,
+            saved_to_database: true,
+            database_type: useMemoryFallback ? 'in-memory' : 'azure-sql',
+            saved_predictions: savedPredictions
+        });
         
-        res.json(analytics);
     } catch (error) {
-        console.error('Analytics error:', error.message);
-        res.status(500).json({ success: false, error: error.message });
+        console.error('14-day prediction error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message
+        });
     }
 });
 
-// Get recent predictions
+// Get recent predictions (enhanced)
 app.get('/api/predictions/recent', async (req, res) => {
     try {
         let recentPredictions;
@@ -775,6 +1342,7 @@ app.get('/api/predictions/recent', async (req, res) => {
                         actual_temperature: accuracy ? accuracy.actual_temperature : null,
                         absolute_error: accuracy ? accuracy.absolute_error : null,
                         evaluation_type: accuracy ? accuracy.evaluation_type : null,
+                        accuracy_category: accuracy ? accuracy.accuracy_category : null,
                         status: accuracy ? 'evaluated' : 'pending'
                     };
                 });
@@ -785,6 +1353,7 @@ app.get('/api/predictions/recent', async (req, res) => {
                     pa.actual_temperature,
                     pa.absolute_error,
                     pa.evaluation_type,
+                    pa.accuracy_category,
                     CASE WHEN pa.id IS NULL THEN 'pending' ELSE 'evaluated' END as status
                 FROM predictions p
                 LEFT JOIN prediction_accuracy pa ON p.id = pa.prediction_id
@@ -800,40 +1369,17 @@ app.get('/api/predictions/recent', async (req, res) => {
     }
 });
 
-// Get historical data
-app.get('/api/temperature/historical', async (req, res) => {
-    try {
-        const days = parseInt(req.query.days) || 30;
-        let result;
-        
-        if (useMemoryFallback) {
-            result = temperatureData
-                .sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
-                .slice(0, days * 6);
-        } else {
-            const dbResult = await pool.request()
-                .input('limit', sql.Int, days * 6)
-                .query(`SELECT TOP (@limit) * FROM temperature_data ORDER BY date_time DESC`);
-            result = dbResult.recordset;
-        }
-        
-        res.json(result.reverse());
-    } catch (error) {
-        console.error('Historical data error:', error.message);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// Combined chart data
+// Chart data
 app.get('/api/chart/combined', async (req, res) => {
     try {
-        let historical, futurePredictions;
+        let historical, futurePredictions, evaluated;
         
         if (useMemoryFallback) {
             historical = temperatureData.slice(-30);
             futurePredictions = predictions
                 .filter(p => new Date(p.target_date) > new Date())
                 .slice(0, 14);
+            evaluated = predictionAccuracy.slice(-10);
         } else {
             const histResult = await pool.request().query(`
                 SELECT TOP 30 * FROM temperature_data 
@@ -847,6 +1393,13 @@ app.get('/api/chart/combined', async (req, res) => {
                 ORDER BY target_date
             `);
             futurePredictions = predResult.recordset;
+            
+            const evalResult = await pool.request().query(`
+                SELECT TOP 10 pa.*, p.target_date FROM prediction_accuracy pa
+                JOIN predictions p ON pa.prediction_id = p.id
+                ORDER BY pa.evaluation_date DESC
+            `);
+            evaluated = evalResult.recordset;
         }
         
         res.json({
@@ -860,6 +1413,12 @@ app.get('/api/chart/combined', async (req, res) => {
                 temperature: p.predicted_temperature,
                 confidence: p.confidence,
                 type: 'prediction'
+            })),
+            evaluated: evaluated.map(e => ({
+                date: e.target_date || e.evaluation_date,
+                actual_temperature: e.actual_temperature,
+                predicted_temperature: e.predicted_temperature,
+                type: 'evaluated'
             }))
         });
     } catch (error) {
@@ -868,7 +1427,7 @@ app.get('/api/chart/combined', async (req, res) => {
     }
 });
 
-// Retrain model
+// Model management
 app.post('/api/retrain', async (req, res) => {
     try {
         const success = await trainModel();
@@ -882,7 +1441,7 @@ app.post('/api/retrain', async (req, res) => {
     }
 });
 
-// Evaluate prediction
+// Legacy evaluation endpoint (for backward compatibility)
 app.post('/api/evaluate', async (req, res) => {
     try {
         const { prediction_id, actual_temperature } = req.body;
@@ -891,7 +1450,6 @@ app.post('/api/evaluate', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Invalid input data' });
         }
         
-        // Get prediction
         let prediction;
         if (useMemoryFallback) {
             prediction = predictions.find(p => p.id === prediction_id);
@@ -908,8 +1466,8 @@ app.post('/api/evaluate', async (req, res) => {
         
         const error = Math.abs(actual_temperature - prediction.predicted_temperature);
         const percentageError = (error / Math.abs(actual_temperature)) * 100;
+        const accuracyCategory = getAccuracyCategory(error);
         
-        // Save accuracy record
         if (useMemoryFallback) {
             predictionAccuracy.push({
                 id: predictionAccuracy.length + 1,
@@ -919,7 +1477,8 @@ app.post('/api/evaluate', async (req, res) => {
                 absolute_error: error,
                 percentage_error: percentageError,
                 evaluation_date: new Date().toISOString(),
-                evaluation_type: 'manual'
+                evaluation_type: 'manual',
+                accuracy_category
             });
             await saveMemoryData();
         } else {
@@ -929,10 +1488,11 @@ app.post('/api/evaluate', async (req, res) => {
                 .input('predicted_temperature', sql.Float, prediction.predicted_temperature)
                 .input('absolute_error', sql.Float, error)
                 .input('percentage_error', sql.Float, percentageError)
+                .input('accuracy_category', sql.VarChar(20), accuracyCategory)
                 .query(`
                     INSERT INTO prediction_accuracy 
-                    (prediction_id, actual_temperature, predicted_temperature, absolute_error, percentage_error, evaluation_type) 
-                    VALUES (@prediction_id, @actual_temperature, @predicted_temperature, @absolute_error, @percentage_error, 'manual')
+                    (prediction_id, actual_temperature, predicted_temperature, absolute_error, percentage_error, evaluation_type, accuracy_category) 
+                    VALUES (@prediction_id, @actual_temperature, @predicted_temperature, @absolute_error, @percentage_error, 'manual', @accuracy_category)
                 `);
         }
         
@@ -940,10 +1500,11 @@ app.post('/api/evaluate', async (req, res) => {
             success: true,
             absolute_error: Math.round(error * 100) / 100,
             percentage_error: Math.round(percentageError * 100) / 100,
-            accuracy_percentage: Math.round(Math.max(0, 100 - percentageError) * 100) / 100
+            accuracy_percentage: Math.round(Math.max(0, 100 - percentageError) * 100) / 100,
+            accuracy_category: accuracyCategory
         });
     } catch (error) {
-        console.error('Evaluation error:', error.message);
+        console.error('Legacy evaluation error:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -953,19 +1514,16 @@ async function startServer() {
     try {
         console.log('\n🚀 Starting AI Temperature Prediction System...\n');
         
-        // Initialize database
         const dbConnected = await initDB();
         if (!dbConnected) {
             throw new Error('Failed to initialize database');
         }
         
-        // Create and train AI model
         const modelCreated = await createModel();
         if (!modelCreated) {
             throw new Error('Failed to create AI model');
         }
         
-        // Try to train with existing data
         const trained = await trainModel();
         if (trained) {
             console.log('✅ Model training completed on startup');
@@ -977,7 +1535,6 @@ async function startServer() {
         autoCompareInterval = setInterval(autoComparePredictions, 30 * 60 * 1000); // Every 30 minutes
         setTimeout(autoComparePredictions, 60000); // Initial check after 1 minute
         
-        // Start server
         app.listen(PORT, () => {
             console.log('\n🎉 Server running successfully!\n');
             console.log(`📊 Dashboard: http://localhost:${PORT}`);
@@ -988,6 +1545,8 @@ async function startServer() {
             console.log(`🤖 Auto-Compare: Active (checks every 30 minutes)`);
             console.log(`🌍 Weather: ${WEATHER_API_KEY ? 'OpenWeatherMap API' : 'Demo Mode'}`);
             console.log(`📍 Location: ${WEATHER_CITY}`);
+            console.log(`📁 File Upload: Enabled for CSV imports`);
+            console.log(`📈 Manual Evaluation: Full support enabled`);
             console.log('\n✅ All systems operational\n');
         });
         
@@ -997,7 +1556,8 @@ async function startServer() {
         console.log('1. Check your .env file contains all required variables');
         console.log('2. Verify Azure SQL firewall allows your IP address');
         console.log('3. Test weather API key at openweathermap.org');
-        console.log('4. Ensure Node.js dependencies are installed\n');
+        console.log('4. Ensure Node.js dependencies are installed');
+        console.log('5. Run: npm install express cors mssql @tensorflow/tfjs-node dotenv csv-parser multer\n');
         process.exit(1);
     }
 }

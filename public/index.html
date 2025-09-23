@@ -3,286 +3,763 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Temperature Prediction System - Enhanced</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <title>AI Temperature Prediction System</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333; min-height: 100vh; padding: 20px;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        
-        .container { max-width: 1600px; margin: 0 auto; }
-        
-        .header { 
-            text-align: center; margin-bottom: 30px; color: white; 
-            background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px;
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
+            padding: 1rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
-        .header h1 { font-size: 2.5rem; margin-bottom: 10px; }
-        .header p { font-size: 1.1rem; opacity: 0.9; }
-        
-        .system-status { 
-            margin-top: 15px; padding: 10px 20px; border-radius: 20px; 
-            background: rgba(255,255,255,0.2); display: inline-block;
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
         }
-        
-        .dashboard { 
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
-            gap: 20px; margin-bottom: 30px; 
+
+        .logo h1 {
+            color: #667eea;
+            font-size: 1.8rem;
+            margin-bottom: 0.2rem;
         }
-        
-        .card { 
-            background: rgba(255,255,255,0.95); border-radius: 15px; padding: 25px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1); backdrop-filter: blur(10px);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+
+        .logo p {
+            color: #666;
+            font-size: 0.9rem;
         }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 15px 40px rgba(0,0,0,0.15); }
-        .card h3 { margin-bottom: 20px; color: #4a5568; font-size: 1.3rem; }
-        
-        .btn { 
-            background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; 
-            padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600;
-            margin: 8px; transition: all 0.3s ease; font-size: 14px;
+
+        .status {
+            background: #f8f9fa;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            border: 1px solid #e9ecef;
         }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.4); }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        
-        .btn-success { background: linear-gradient(45deg, #48bb78, #38a169); }
-        .btn-danger { background: linear-gradient(45deg, #f56565, #e53e3e); }
-        
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #4a5568; }
-        .form-group input { 
-            width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 6px; 
-            font-size: 16px; transition: border-color 0.3s ease;
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
         }
-        .form-group input:focus { outline: none; border-color: #667eea; }
-        
-        .result { 
-            margin: 15px 0; padding: 15px; border-radius: 8px; font-weight: 600;
-            display: none; animation: slideIn 0.3s ease;
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
         }
-        .result.success { background: #c6f6d5; color: #22543d; }
-        .result.error { background: #fed7d7; color: #c53030; }
-        .result.info { background: #bee3f8; color: #2a69ac; }
-        
-        .prediction-display { 
-            background: linear-gradient(45deg, #48bb78, #38a169); color: white; 
-            padding: 20px; border-radius: 10px; text-align: center; margin: 15px 0;
+
+        .tab {
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .tab-content {
             display: none;
+            animation: fadeIn 0.3s ease-in;
         }
-        .prediction-temp { font-size: 2.5rem; font-weight: bold; margin: 10px 0; }
-        .prediction-details { 
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); 
-            gap: 10px; margin-top: 15px; font-size: 0.9rem;
+
+        .tab-content.active {
+            display: block;
         }
-        .prediction-detail { background: rgba(255,255,255,0.2); padding: 8px; border-radius: 5px; }
-        
-        .analytics-grid { 
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); 
-            gap: 15px; margin: 20px 0; 
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .stat-card { 
-            background: linear-gradient(45deg, #667eea, #764ba2); color: white; 
-            padding: 20px; border-radius: 10px; text-align: center;
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
         }
-        .stat-value { font-size: 2rem; font-weight: bold; display: block; }
-        .stat-label { font-size: 0.9rem; opacity: 0.9; }
-        
-        .chart-container { height: 300px; margin: 20px 0; position: relative; }
-        .chart-container canvas { background: white; border-radius: 10px; }
-        
-        .predictions-list { max-height: 400px; overflow-y: auto; }
-        .prediction-item { 
-            background: #f8fafc; margin: 8px 0; padding: 12px; border-radius: 6px; 
-            border-left: 4px solid #667eea; display: flex; justify-content: space-between; 
-            align-items: center; font-size: 0.9rem;
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
-        .prediction-item.evaluated { border-left-color: #48bb78; }
-        .prediction-item.pending { border-left-color: #ed8936; }
-        
-        .status-badge { 
-            padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;
+
+        .card h3 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
         }
-        .status-badge.pending { background: #fef5e7; color: #c05621; }
-        .status-badge.evaluated { background: #c6f6d5; color: #22543d; }
-        
-        .weather-info { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; padding: 20px; border-radius: 10px; margin: 15px 0;
+
+        .form-group {
+            margin-bottom: 1rem;
         }
-        .weather-main { text-align: center; margin-bottom: 15px; }
-        .weather-temp { font-size: 3rem; font-weight: bold; display: block; }
-        .weather-location { font-size: 1.1rem; opacity: 0.9; }
-        .weather-details { 
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); 
-            gap: 10px; margin: 15px 0; 
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #555;
         }
-        .weather-item { 
-            background: rgba(255,255,255,0.2); padding: 10px; border-radius: 6px; 
-            text-align: center; font-size: 0.9rem;
-        }
-        .weather-label { display: block; font-size: 0.8rem; opacity: 0.8; }
-        .weather-value { display: block; font-weight: bold; font-size: 1rem; }
-        .weather-timestamp { text-align: center; font-size: 0.8rem; opacity: 0.8; margin-top: 10px; }
-        .weather-error { text-align: center; padding: 20px; color: #e53e3e; background: #fed7d7; border-radius: 8px; margin: 15px 0; }
-        
-        .tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
-        .tab { 
-            padding: 12px 24px; background: none; border: none; cursor: pointer; 
-            font-weight: 600; color: #718096; border-bottom: 2px solid transparent;
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
             transition: all 0.3s ease;
         }
-        .tab.active, .tab:hover { color: #667eea; border-bottom-color: #667eea; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        
-        .wide-card { grid-column: 1 / -1; }
-        .loading { text-align: center; color: #718096; padding: 20px; }
-        
-        .prediction-summary { 
-            background: #f7fafc; padding: 15px; border-radius: 8px; margin: 10px 0;
-            border-left: 4px solid #48bb78;
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-        .prediction-summary h4 { color: #2d3748; margin-bottom: 10px; }
-        .prediction-summary small { color: #4a5568; line-height: 1.4; }
-        
-        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin: 0.25rem;
+            display: inline-block;
+            text-decoration: none;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #218838;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background: #e0a800;
+        }
+
+        .btn-mini {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+            margin: 0;
+        }
+
+        .btn-evaluate {
+            background: #28a745;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .result {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .result.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .weather-info {
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            color: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .weather-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .weather-temp {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+
+        .weather-location {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .weather-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 1rem;
+        }
+
+        .weather-item {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem;
+            border-radius: 8px;
+        }
+
+        .weather-label {
+            display: block;
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-bottom: 0.2rem;
+        }
+
+        .weather-value {
+            display: block;
+            font-weight: bold;
+        }
+
+        .weather-timestamp {
+            text-align: center;
+            font-size: 0.8rem;
+            opacity: 0.7;
+            margin-top: 1rem;
+        }
+
+        .weather-error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .analytics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+
+        .metric {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 1rem 0;
+        }
+
+        .predictions-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+
+        .prediction-item {
+            padding: 1rem;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .prediction-item:last-child {
+            border-bottom: none;
+        }
+
+        .prediction-item.evaluated {
+            background: #f8f9fa;
+        }
+
+        .prediction-item.pending {
+            background: #fff3cd;
+        }
+
+        .status-badge {
+            padding: 0.3rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .status-badge.evaluated {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-badge.unknown {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .evaluation-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .temp-input {
+            width: 100px !important;
+            padding: 0.4rem !important;
+            font-size: 0.9rem !important;
+        }
+
+        .pending-evaluations {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+
+        .pending-evaluation-item {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e9ecef;
+            background: #fffbf0;
+        }
+
+        .pending-evaluation-item:last-child {
+            border-bottom: none;
+        }
+
+        .prediction-info {
+            margin-bottom: 1rem;
+        }
+
+        .prediction-details {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
+        .prediction-details > div {
+            margin-bottom: 0.3rem;
+        }
+
+        .overdue-info {
+            color: #d63384;
+            font-weight: 500;
+        }
+
+        .evaluation-form {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .quick-evaluation {
+            background: #e3f2fd;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 2px dashed #2196f3;
+            margin-bottom: 2rem;
+        }
+
+        .file-upload {
+            margin-top: 1rem;
+        }
+
+        .file-upload input[type="file"] {
+            margin-bottom: 1rem;
+        }
+
+        .prediction-summary {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .prediction-summary h4 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .batch-info, .prediction-details, .evaluation-note {
+            margin-bottom: 1rem;
+            padding: 0.5rem 0;
+        }
+
+        .batch-info {
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .evaluation-note {
+            border-top: 1px solid #dee2e6;
+            font-style: italic;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            font-style: italic;
+        }
+
+        .no-pending {
+            text-align: center;
+            padding: 2rem;
+            color: #28a745;
+            font-weight: 500;
+        }
+
         @media (max-width: 768px) {
-            .dashboard { grid-template-columns: 1fr; }
-            .header h1 { font-size: 2rem; }
-            .prediction-details { grid-template-columns: 1fr 1fr; }
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .tabs {
+                justify-content: center;
+            }
+
+            .tab {
+                padding: 0.75rem 1rem;
+                font-size: 0.9rem;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .analytics {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .weather-main {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .weather-details {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .prediction-item {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .evaluation-form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .temp-input {
+                width: 100% !important;
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .success-highlight {
+            background: #d4edda !important;
+            transition: background 0.3s ease;
+        }
+
+        .error-highlight {
+            background: #f8d7da !important;
+            transition: background 0.3s ease;
         }
     </style>
 </head>
 <body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">
+                <h1>🌡️ AI Temperature Predictor</h1>
+                <p>Advanced Machine Learning Weather Forecasting</p>
+            </div>
+            <div class="status" id="status-text">
+                🔄 Loading system status...
+            </div>
+        </div>
+    </div>
+
     <div class="container">
-        <div class="header">
-            <h1>AI Temperature Prediction System</h1>
-            <p>Enhanced with Auto-Comparison & 14-Day Forecasting</p>
-            <div id="system-status" class="system-status">
-                <span id="status-text">Loading system status...</span>
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('dashboard')">📊 Dashboard</button>
+            <button class="tab" onclick="showTab('predictions')">🔮 Predictions</button>
+            <button class="tab" onclick="showTab('evaluations')">✅ Evaluations</button>
+            <button class="tab" onclick="showTab('analytics')">📈 Analytics</button>
+            <button class="tab" onclick="showTab('chart')">📉 Charts</button>
+            <button class="tab" onclick="showTab('forecast')">🌦️ Forecast</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard-content" class="tab-content active">
+            <div class="grid">
+                <!-- Current Weather Card -->
+                <div class="card">
+                    <h3>🌤️ Current Weather</h3>
+                    <div id="weather-display">
+                        <div class="loading">Loading weather data...</div>
+                    </div>
+                    <button onclick="getCurrentWeather()" class="btn">🔄 Refresh Weather</button>
+                    <button onclick="saveWeatherData()" class="btn btn-success">💾 Save Current Data</button>
+                </div>
+
+                <!-- Add Temperature Data Card -->
+                <div class="card">
+                    <h3>📝 Add Temperature Data</h3>
+                    <form onsubmit="event.preventDefault(); addData();">
+                        <div class="form-group">
+                            <label for="temp">Temperature (°C) *</label>
+                            <input type="number" id="temp" step="0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="humidity">Humidity (%)</label>
+                            <input type="number" id="humidity" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label for="pressure">Pressure (hPa)</label>
+                            <input type="number" id="pressure" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label for="wind_speed">Wind Speed (km/h)</label>
+                            <input type="number" id="wind_speed" step="0.1" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="cloud_cover">Cloud Cover (%)</label>
+                            <input type="number" id="cloud_cover" min="0" max="100">
+                        </div>
+                        <button type="submit" class="btn">➕ Add Data</button>
+                        <button type="button" onclick="retrainModel()" class="btn btn-secondary">🧠 Retrain Model</button>
+                    </form>
+                    <div id="add-data-result" class="result"></div>
+                </div>
+
+                <!-- Make Predictions Card -->
+                <div class="card">
+                    <h3>🔮 Make Predictions</h3>
+                    <button onclick="predictNextDay()" class="btn">🌅 Predict Tomorrow</button>
+                    <button onclick="predict14Days()" class="btn btn-warning">📅 14-Day Forecast</button>
+                    
+                    <div id="prediction-display" style="display: none; margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                        <h4>Tomorrow's Prediction</h4>
+                        <p><strong>Temperature:</strong> <span id="prediction-temp">--</span></p>
+                        <p><strong>Confidence:</strong> <span id="confidence">--</span></p>
+                        <p><strong>Date:</strong> <span id="pred-date">--</span></p>
+                    </div>
+                    
+                    <div id="prediction-result" class="result"></div>
+                    <div id="14-day-results"></div>
+                </div>
             </div>
         </div>
 
-        <div class="dashboard">
-            <!-- Current Weather Card -->
+        <!-- Predictions Tab -->
+        <div id="predictions-content" class="tab-content">
             <div class="card">
-                <h3>🌤️ Current Weather</h3>
-                <div id="weather-display">
-                    <div class="loading">Loading weather data...</div>
-                </div>
-                <button class="btn" onclick="getCurrentWeather()">🔄 Refresh Weather</button>
-                
-                <div id="weather-result" class="result"></div>
-            </div>
-
-            <!-- Add Data Card -->
-            <div class="card">
-                <h3>📊 Add Temperature Data</h3>
-                <div class="form-group">
-                    <label for="temp">Temperature (°C) *</label>
-                    <input type="number" id="temp" step="0.1" placeholder="25.5" required>
-                </div>
-                <div class="form-group">
-                    <label for="humidity">Humidity (%)</label>
-                    <input type="number" id="humidity" step="0.1" placeholder="65">
-                </div>
-                <div class="form-group">
-                    <label for="pressure">Pressure (hPa)</label>
-                    <input type="number" id="pressure" step="0.1" placeholder="1013">
-                </div>
-                <div class="form-group">
-                    <label for="wind_speed">Wind Speed (km/h)</label>
-                    <input type="number" id="wind_speed" step="0.1" placeholder="10">
-                </div>
-                <div class="form-group">
-                    <label for="cloud_cover">Cloud Cover (%)</label>
-                    <input type="number" id="cloud_cover" step="0.1" placeholder="50">
-                </div>
-                <button class="btn btn-success" onclick="addData()">📈 Add Data</button>
-                
-                <div id="add-data-result" class="result"></div>
-            </div>
-
-            <!-- Enhanced Prediction Card -->
-            <div class="card">
-                <h3>🔮 AI Predictions</h3>
-                <button class="btn" onclick="predictNextDay()">🎯 Predict Tomorrow</button>
-                <button class="btn btn-success" onclick="predict14Days()">📅 14-Day Forecast</button>
-                <button class="btn btn-danger" onclick="retrainModel()">🧠 Retrain Model</button>
-                
-                <div id="prediction-display" class="prediction-display">
-                    <div class="prediction-temp" id="prediction-temp">--°C</div>
-                    <div id="prediction-text">Tomorrow's Temperature</div>
-                    <div class="prediction-details" id="prediction-details">
-                        <div class="prediction-detail">
-                            <div><strong>Confidence</strong></div>
-                            <div id="confidence">--%</div>
-                        </div>
-                        <div class="prediction-detail">
-                            <div><strong>Date</strong></div>
-                            <div id="pred-date">--</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="14-day-results"></div>
-                <div id="prediction-result" class="result"></div>
-            </div>
-        </div>
-
-        <!-- Enhanced Analytics Card -->
-        <div class="card wide-card">
-            <div class="tabs">
-                <button class="tab active" onclick="showTab('analytics')">📊 Analytics</button>
-                <button class="tab" onclick="showTab('predictions')">🔮 Predictions</button>
-                <button class="tab" onclick="showTab('chart')">📈 Historical</button>
-                <button class="tab" onclick="showTab('forecast')">🔮 Forecast Chart</button>
-            </div>
-
-            <div id="analytics-content" class="tab-content active">
-                <h3>Enhanced System Analytics</h3>
-                <div class="analytics-grid" id="analytics-grid">
-                    <div class="stat-card">
-                        <span class="stat-value" id="total-predictions">0</span>
-                        <span class="stat-label">Total Predictions</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-value" id="avg-error">0</span>
-                        <span class="stat-label">Avg Error</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-value" id="accuracy">0%</span>
-                        <span class="stat-label">Recent Accuracy</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-value" id="auto-evals">0</span>
-                        <span class="stat-label">Auto Evaluations</span>
-                    </div>
-                </div>
-            </div>
-
-            <div id="predictions-content" class="tab-content">
-                <h3>Recent Predictions (with Auto-Evaluation)</h3>
-                <div class="predictions-list" id="predictions-list">
+                <h3>📋 Recent Predictions</h3>
+                <div id="predictions-list" class="predictions-list">
                     <div class="loading">Loading predictions...</div>
                 </div>
             </div>
+        </div>
 
-            <div id="chart-content" class="tab-content">
-                <h3>Historical Temperature Data</h3>
+        <!-- Evaluations Tab -->
+        <div id="evaluations-content" class="tab-content">
+            <div class="card">
+                <h3>⏳ Pending Evaluations</h3>
+                <p>These predictions have passed their target date and are awaiting manual evaluation:</p>
+                
+                <!-- Quick Evaluation Form -->
+                <div class="quick-evaluation">
+                    <h4>🚀 Quick Evaluation by Date</h4>
+                    <div class="evaluation-form">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="quick-prediction-date">Target Date:</label>
+                            <input type="date" id="quick-prediction-date">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="quick-actual-temp">Actual Temperature (°C):</label>
+                            <input type="number" id="quick-actual-temp" step="0.1" placeholder="e.g. 22.5" class="temp-input">
+                        </div>
+                        <button onclick="quickAddActualTemp()" class="btn btn-success">✓ Quick Evaluate</button>
+                    </div>
+                </div>
+
+                <div id="pending-evaluations-list" class="pending-evaluations">
+                    <div class="loading">Loading pending evaluations...</div>
+                </div>
+
+                <div style="margin-top: 1rem; text-align: center;">
+                    <button onclick="bulkEvaluatePredictions()" class="btn btn-warning">📦 Process All Evaluations</button>
+                </div>
+
+                <div id="evaluation-result" class="result"></div>
+            </div>
+
+            <!-- Data Management Card -->
+            <div class="card" style="margin-top: 2rem;">
+                <h3>📁 Data Management</h3>
+                <div style="margin-bottom: 1rem;">
+                    <button onclick="exportEvaluationData()" class="btn btn-secondary">📤 Export Evaluations (CSV)</button>
+                </div>
+                
+                <div class="file-upload">
+                    <h4>📥 Import Historical Evaluations</h4>
+                    <p>Upload a CSV file with prediction evaluations:</p>
+                    <input type="file" id="import-file" accept=".csv" onchange="importEvaluationData(event)">
+                    <small>Expected columns: prediction_id, actual_temperature, evaluation_type, notes</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics-content" class="tab-content">
+            <div class="card">
+                <h3>📊 System Analytics</h3>
+                <div class="analytics">
+                    <div class="metric">
+                        <div class="metric-value" id="total-predictions">0</div>
+                        <div class="metric-label">Total Predictions</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="avg-error">0°C</div>
+                        <div class="metric-label">Average Error</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="accuracy">0%</div>
+                        <div class="metric-label">Recent Accuracy</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="auto-evals">0</div>
+                        <div class="metric-label">Auto Evaluations</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="manual-evals">0</div>
+                        <div class="metric-label">Manual Evaluations</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="pending-evals">0</div>
+                        <div class="metric-label">Pending Evaluations</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Tab -->
+        <div id="chart-content" class="tab-content">
+            <div class="card">
+                <h3>📈 Historical Temperature Data</h3>
                 <div class="chart-container">
                     <canvas id="temperature-chart"></canvas>
                 </div>
             </div>
+        </div>
 
-            <div id="forecast-content" class="tab-content">
-                <h3>Historical vs Predictions</h3>
+        <!-- Forecast Tab -->
+        <div id="forecast-content" class="tab-content">
+            <div class="card">
+                <h3>🌦️ Combined Forecast View</h3>
                 <div class="chart-container">
                     <canvas id="prediction-chart"></canvas>
                 </div>
@@ -290,6 +767,7 @@
         </div>
     </div>
 
+    <!-- Load the enhanced JavaScript -->
     <script src="script.js"></script>
 </body>
 </html>

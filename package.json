@@ -21,9 +21,11 @@
   "dependencies": {
     "@tensorflow/tfjs-node": "^4.22.0",
     "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
-    "mssql": "^10.0.4"
+    "mssql": "^10.0.4",
+    "multer": "^2.0.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
