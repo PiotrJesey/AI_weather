@@ -15,7 +15,7 @@ COPY . .
 
 # Expose the port your app uses
 ENV PORT=3000
-EXPOSE 3000
+EXPOSE 80
 
 # Command to run the app
 CMD ["node", "server.js"]
