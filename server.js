@@ -343,6 +343,7 @@ async function createModel() {
         console.log('🧠 AI model created');
         return true;
     } catch (error) {
+        
         console.error('Model creation failed:', error.message);
         return false;
     }

@@ -1,6 +1,16 @@
 {
   "temperatureData": [
     {
+      "id": 1603,
+      "date_time": "2025-09-24T12:15:27.648Z",
+      "temperature": 17.2,
+      "humidity": 65,
+      "pressure": 1023,
+      "wind_speed": 18.5,
+      "cloud_cover": 40,
+      "data_type": "weather_api"
+    },
+    {
       "id": 1602,
       "date_time": "2025-09-23T21:44:00.815Z",
       "temperature": 14.4,
@@ -16023,6 +16033,171 @@
   ],
   "predictions": [
     {
+      "id": 44,
+      "prediction_date": "2025-09-24T12:17:17.405Z",
+      "target_date": "2025-09-25T12:00:00.000Z",
+      "predicted_temperature": 16.6,
+      "confidence": 0.77,
+      "model_version": "v2.0",
+      "prediction_type": "single",
+      "days_ahead": 1,
+      "auto_evaluated": false
+    },
+    {
+      "id": 30,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-09-24T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.77,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 1,
+      "auto_evaluated": true
+    },
+    {
+      "id": 31,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-09-25T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.7,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 2,
+      "auto_evaluated": false
+    },
+    {
+      "id": 32,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-09-26T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.63,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 3,
+      "auto_evaluated": false
+    },
+    {
+      "id": 33,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-09-27T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.57,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 4,
+      "auto_evaluated": false
+    },
+    {
+      "id": 34,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-09-28T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.52,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 5,
+      "auto_evaluated": false
+    },
+    {
+      "id": 35,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-09-29T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.47,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 6,
+      "auto_evaluated": false
+    },
+    {
+      "id": 36,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-09-30T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.42,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 7,
+      "auto_evaluated": false
+    },
+    {
+      "id": 37,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-10-01T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.38,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 8,
+      "auto_evaluated": false
+    },
+    {
+      "id": 38,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-10-02T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.35,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 9,
+      "auto_evaluated": false
+    },
+    {
+      "id": 39,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-10-03T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.31,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 10,
+      "auto_evaluated": false
+    },
+    {
+      "id": 40,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-10-04T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.28,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 11,
+      "auto_evaluated": false
+    },
+    {
+      "id": 41,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-10-05T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.26,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 12,
+      "auto_evaluated": false
+    },
+    {
+      "id": 42,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-10-06T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.23,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 13,
+      "auto_evaluated": false
+    },
+    {
+      "id": 43,
+      "prediction_date": "2025-09-23T21:57:14.067Z",
+      "target_date": "2025-10-07T12:00:00.000Z",
+      "predicted_temperature": 15.8,
+      "confidence": 0.21,
+      "model_version": "v2.0",
+      "prediction_type": "14-day",
+      "days_ahead": 14,
+      "auto_evaluated": false
+    },
+    {
       "id": 16,
       "prediction_date": "2025-09-23T21:46:29.988Z",
       "target_date": "2025-09-24T12:00:00.000Z",
@@ -16031,7 +16206,7 @@
       "model_version": "v2.0",
       "prediction_type": "14-day",
       "days_ahead": 1,
-      "auto_evaluated": false
+      "auto_evaluated": true
     },
     {
       "id": 17,
@@ -16185,7 +16360,7 @@
       "model_version": "v2.0",
       "prediction_type": "single",
       "days_ahead": 1,
-      "auto_evaluated": false
+      "auto_evaluated": true
     },
     {
       "id": 1,
@@ -16196,7 +16371,7 @@
       "model_version": "v2.0",
       "prediction_type": "14-day",
       "days_ahead": 1,
-      "auto_evaluated": false
+      "auto_evaluated": true
     },
     {
       "id": 2,
@@ -16342,10 +16517,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 30,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-09-24T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 45,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-09-25T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.77,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16353,10 +16528,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 31,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-09-25T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 46,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-09-26T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.7,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16364,10 +16539,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 32,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-09-26T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 47,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-09-27T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.63,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16375,10 +16550,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 33,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-09-27T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 48,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-09-28T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.57,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16386,10 +16561,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 34,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-09-28T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 49,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-09-29T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.52,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16397,10 +16572,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 35,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-09-29T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 50,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-09-30T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.47,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16408,10 +16583,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 36,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-09-30T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 51,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-10-01T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.42,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16419,10 +16594,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 37,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-10-01T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 52,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-10-02T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.38,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16430,10 +16605,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 38,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-10-02T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 53,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-10-03T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.35,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16441,10 +16616,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 39,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-10-03T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 54,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-10-04T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.31,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16452,10 +16627,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 40,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-10-04T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 55,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-10-05T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.28,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16463,10 +16638,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 41,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-10-05T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 56,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-10-06T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.26,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16474,10 +16649,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 42,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-10-06T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 57,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-10-07T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.23,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16485,10 +16660,10 @@
       "auto_evaluated": false
     },
     {
-      "id": 43,
-      "prediction_date": "2025-09-23T21:57:14.067Z",
-      "target_date": "2025-10-07T12:00:00.000Z",
-      "predicted_temperature": 15.8,
+      "id": 58,
+      "prediction_date": "2025-09-24T12:17:27.070Z",
+      "target_date": "2025-10-08T12:00:00.000Z",
+      "predicted_temperature": 16.6,
       "confidence": 0.21,
       "model_version": "v2.0",
       "prediction_type": "14-day",
@@ -16496,6 +16671,51 @@
       "auto_evaluated": false
     }
   ],
-  "predictionAccuracy": [],
-  "lastSaved": "2025-09-23T21:57:14.129Z"
+  "predictionAccuracy": [
+    {
+      "id": 1,
+      "prediction_id": 30,
+      "actual_temperature": 17.2,
+      "predicted_temperature": 15.8,
+      "absolute_error": 1.3999999999999986,
+      "percentage_error": 8.139534883720923,
+      "evaluation_date": "2025-09-24T12:15:44.349Z",
+      "evaluation_type": "auto",
+      "accuracy_category": "good"
+    },
+    {
+      "id": 2,
+      "prediction_id": 16,
+      "actual_temperature": 17.2,
+      "predicted_temperature": 15.8,
+      "absolute_error": 1.3999999999999986,
+      "percentage_error": 8.139534883720923,
+      "evaluation_date": "2025-09-24T12:15:44.355Z",
+      "evaluation_type": "auto",
+      "accuracy_category": "good"
+    },
+    {
+      "id": 3,
+      "prediction_id": 15,
+      "actual_temperature": 17.2,
+      "predicted_temperature": 14.6,
+      "absolute_error": 2.5999999999999996,
+      "percentage_error": 15.11627906976744,
+      "evaluation_date": "2025-09-24T12:15:44.361Z",
+      "evaluation_type": "auto",
+      "accuracy_category": "fair"
+    },
+    {
+      "id": 4,
+      "prediction_id": 1,
+      "actual_temperature": 17.2,
+      "predicted_temperature": 14.6,
+      "absolute_error": 2.5999999999999996,
+      "percentage_error": 15.11627906976744,
+      "evaluation_date": "2025-09-24T12:15:44.366Z",
+      "evaluation_type": "auto",
+      "accuracy_category": "fair"
+    }
+  ],
+  "lastSaved": "2025-09-30T18:35:28.358Z"
 }
