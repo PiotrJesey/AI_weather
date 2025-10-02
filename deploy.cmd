@@ -32,7 +32,7 @@ IF NOT DEFINED DEPLOYMENT_CACHE (
   SET DEPLOYMENT_CACHE=%HOME%\site\deployments\cache
 )
 
-echo Handling Node.js deployment with build step.
+echo Handling Node.js backend deployment.
 
 :: 1. Select Node.js version
 IF DEFINED KUDU_SELECT_NODE_VERSION (
@@ -43,19 +43,11 @@ IF DEFINED KUDU_SELECT_NODE_VERSION (
 IF EXIST "%DEPLOYMENT_SOURCE%\package.json" (
   pushd "%DEPLOYMENT_SOURCE%"
   echo Installing npm packages...
-  call :ExecuteCmd npm install
+  call :ExecuteCmd npm install --production
   popd
 )
 
-:: 3. Run npm build (if available)
-IF EXIST "%DEPLOYMENT_SOURCE%\package.json" (
-  pushd "%DEPLOYMENT_SOURCE%"
-  echo Running npm build...
-  call :ExecuteCmd npm run build
-  popd
-)
-
-:: 4. Copy files to wwwroot (exclude node_modules)
+:: 3. Copy app files to wwwroot (excluding node_modules)
 echo Copying files to %DEPLOYMENT_TARGET%
 robocopy "%DEPLOYMENT_SOURCE%" "%DEPLOYMENT_TARGET%" /E /XD node_modules /NFL /NDL /NJH /NJS /nc /ns /np
 IF %ERRORLEVEL% LSS 8 SET ERRORLEVEL = 0
