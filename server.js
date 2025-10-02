@@ -1,7 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const sql = require('mssql');
-const tf = require('@tensorflow/tfjs-node');
+const tf = require('@tensorflow/tfjs'); 
+
 const fs = require('fs').promises;
 const https = require('https');
 const csv = require('csv-parser');
